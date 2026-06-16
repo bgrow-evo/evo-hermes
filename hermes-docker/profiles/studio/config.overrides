@@ -1,0 +1,20 @@
+# Studio profile config overrides.
+# Applied by install.ps1 via `hermes -p studio config set <key> <value>` after the
+# profile is created (so the generated config.yaml stays valid; we only layer these).
+# Format: one "<dotted.key> <value>" per line. Blank lines and # comments ignored.
+
+# Run the terminal toolset INSIDE the hermes container (where Pillow + imagemagick +
+# libvips + zip are installed by the Dockerfile). The global default is the docker
+# backend, which would need docker-in-docker — not available here.
+terminal.backend local
+
+# Day's work lands here; cron --workdir points at the same place.
+terminal.cwd /opt/data/profiles/studio/work
+
+# Let the daily cron run unattended. Global default is `deny`, which blocks
+# cron-initiated sessions. `allow` auto-approves tool calls in cron runs only;
+# interactive sessions still follow approvals.mode.
+approvals.cron_mode allow
+
+# The full pipeline is long (refresh -> source -> edit -> package across many SKUs).
+agent.max_turns 300

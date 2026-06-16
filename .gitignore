@@ -1,0 +1,24 @@
+# --- Secrets: never commit real env files; commit *.env.example instead ---
+.env
+*.env
+.env.*
+!.env.example
+!*.env.example
+
+# --- Excluded source folders (kept local, not part of this repo) ---
+/photo-workflow-cowork-playbook-all/
+/photo-workflow-cowork-playbook-distilled/
+
+# --- Hermes runtime data dir (if anyone points HERMES_DATA into the repo) ---
+.hermes/
+**/outbox/
+
+# --- Local Claude Code state ---
+.claude/settings.local.json
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~

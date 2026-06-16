@@ -1,0 +1,36 @@
+services:
+  hermes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-nousresearch/hermes-agent:latest}
+    image: hermes-evo:latest
+    container_name: hermes
+    restart: unless-stopped
+    command: gateway run
+    ports:
+      - "8642:8642"   # gateway OpenAI-compatible API + health endpoint
+      - "9119:9119"   # dashboard (only reached when HERMES_DASHBOARD=1)
+      - "3978:3978"   # Microsoft Teams bot messaging endpoint
+    volumes:
+      # HERMES_DATA is set by install.ps1 (defaults to ~/.hermes on Linux/macOS).
+      # On Windows it is written to the .env file beside this compose file.
+      - "${HERMES_DATA:-~/.hermes}:/opt/data"
+    environment:
+      - HERMES_DASHBOARD=1
+      # --- Dashboard web UI (chat) auth: HTTP basic auth ---
+      # Values are supplied via the local .env file written by install.ps1.
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD}
+      # Stable secret so login sessions survive container restarts.
+      - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_BASIC_AUTH_SECRET}
+      # Uncomment to forward specific env vars instead of relying on ~/.hermes/.env:
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
