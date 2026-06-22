@@ -12,7 +12,8 @@ services:
     ports:
       - "8642:8642"   # gateway OpenAI-compatible API + health endpoint
       - "9119:9119"   # dashboard (only reached when HERMES_DASHBOARD=1)
-      - "3978:3978"   # Microsoft Teams bot messaging endpoint
+      - "3978:3978"   # Microsoft Teams bot messaging endpoint (default profile)
+      - "3979:3979"   # Microsoft Teams bot messaging endpoint (studio profile)
     volumes:
       # HERMES_DATA is set by install.ps1 (defaults to ~/.hermes on Linux/macOS).
       # On Windows it is written to the .env file beside this compose file.

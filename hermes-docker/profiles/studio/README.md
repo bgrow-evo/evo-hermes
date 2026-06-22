@@ -80,13 +80,33 @@ docker exec hermes hermes -p studio cron pause <job_id>
 ls ~/.hermes/outbox/studio/
 ```
 
-## Delivery note (Teams)
+## Teams bot (optional, dedicated to studio)
 
-The cron delivers its run summary to `local` (written under
-`~/.hermes/profiles/studio/cron/output/`), and the ZIP lands in the outbox above.
-The studio gateway does **not** bind the Teams webhook port (3978 is owned by the
-default profile's bot), so it does not post to Teams directly. To push the daily
-summary/ZIP into a Teams channel, either pick it up from the outbox, or wire a
-Power Automate flow watching `outbox/studio/` (the playbook already recommends
-Power Automate for the Teams-posting step). Update `--deliver` on the cron job if a
-reachable target is configured later.
+The studio gateway can run its **own** Teams bot, separate from the default
+profile's. Because the default bot owns port `3978`, the studio bot uses **`3979`**
+(published in `docker-compose.yml`) and needs its own Azure registration + tunnel.
+
+Set it up with [`teams-bot-setup-studio.ps1`](../../teams-bot-setup-studio.ps1):
+
+```powershell
+# 1) create the new bot (prints CLIENT_ID / CLIENT_SECRET / TENANT_ID)
+.\teams-bot-setup-studio.ps1
+
+# 2) connect the studio profile to it (writes creds + enables Teams on :3979, restarts gw)
+.\teams-bot-setup-studio.ps1 -WireStudio `
+    -TeamsClientId <id> -TeamsClientSecret <secret> -TeamsTenantId <tenant>
+```
+
+Notes:
+- Run `docker compose up -d` once after pulling the `3979` port change so the
+  webhook is reachable.
+- **Two bots = two tunnels.** ngrok's free tier allows only one agent; use a single
+  agent with two tunnels — `.\teams-bot-setup-studio.ps1 -PrintNgrokConfig` prints a
+  ready `ngrok.yml` for `ngrok start --all`.
+- Creds live in the volume copy `~/.hermes/profiles/studio/.env` and the volume
+  `config.yaml` (`platforms.teams.extra`), never in the repo scaffold.
+
+Once wired, point the daily cron at the studio bot by setting `--deliver` to a
+reachable Teams target (e.g. a DM/channel id the studio bot has a conversation
+reference for). Until then the cron delivers to `local` and the ZIP lands in the
+outbox (`~/.hermes/outbox/studio/<date>/`) for manual/Power-Automate pickup.

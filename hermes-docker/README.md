@@ -106,15 +106,22 @@ platforms:
       tenant_id: <same as TEAMS_TENANT_ID>
 ```
 
-### 2. Start ngrok (every session)
+### 2. Start the tunnel + sync the endpoint (every session)
 
-ngrok is required to route Teams cloud traffic to your local bot. It must be running before Teams sends any messages:
+Just re-run the same script. It is **idempotent**: it resolves ngrok (even if
+it's only installed via winget and not on PATH), reuses or starts the tunnel,
+finds the existing `Hermes` app, and updates its messaging endpoint to the
+current ngrok URL automatically.
 
 ```powershell
-ngrok http 3978
+.\teams-bot-setup.ps1
 ```
 
-The public `https://` URL it prints must match the messaging endpoint registered with your bot. If ngrok restarts and gets a new URL, update the bot registration endpoint.
+No need to manually run `ngrok http 3978` or edit the endpoint in the portal —
+the script does both and verifies the tunnel reaches the bot's `/health`.
+
+> ngrok must stay running while you use the bot. Because the free tier issues a
+> new URL each launch, just re-run `teams-bot-setup.ps1` after any ngrok restart.
 
 ### 3. Install the bot in Teams
 
@@ -136,6 +143,67 @@ Stored in `~/.hermes/.env` on the host (`/opt/data/.env` inside the container):
 | `TEAMS_ALLOWED_USERS` | `82bd9911-5920-4d97-965a-96b8d624143f` |
 | `TEAMS_CLIENT_SECRET` | stored in `~/.hermes/.env` |
 | `NGROK_AUTHTOKEN` | stored in project `.env` |
+
+## LLM provider — OpenAI Codex via OAuth
+
+Hermes runs on the `openai-codex` provider (`gpt-5.5`), authenticated against the
+evo ChatGPT **Team** workspace (account `309dd741-6002-4291-b973-8294070a61b9`).
+
+### Why the normal flow doesn't work
+
+`hermes auth add openai-codex` only supports the OAuth **device-code** flow, which
+evo's tenant blocks two ways:
+
+- **Azure AD** `AADSTS50105` — the ChatGPT enterprise app requires explicit user
+  assignment for `hermes-ai@evo.com`.
+- **ChatGPT workspace** — the admin has disabled device-code authentication.
+
+The fix is to run the standard **authorization-code + PKCE** flow manually (the same
+one the Codex CLI uses, redirect `http://localhost:1455/auth/callback`). Helper
+scripts live in `.codex-oauth/`.
+
+### Re-authenticating (token refresh fails, or new host)
+
+Hermes auto-refreshes the access token using the stored refresh token, so this is
+only needed if refresh fails or you're provisioning a fresh data dir.
+
+```powershell
+# 1. Generate the login URL (writes PKCE state into the data volume)
+docker cp .\.codex-oauth\step1_authorize.py hermes:/tmp/step1_authorize.py
+docker compose exec --user hermes hermes /opt/hermes/.venv/bin/python3 /tmp/step1_authorize.py
+
+# 2. Open the printed URL, sign in with the tenant account.
+#    The browser redirects to http://localhost:1455/auth/callback?code=...&state=...
+#    which fails to load — that's expected. Copy the FULL URL from the address bar.
+
+# 3. Write that callback URL into the data volume (NOT into the repo):
+Set-Content "$env:USERPROFILE\.hermes\.codex_callback.txt" '<paste callback URL>'
+
+# 4. Exchange the code for tokens and save them into Hermes's auth store:
+docker cp .\.codex-oauth\step2_exchange.py hermes:/tmp/step2_exchange.py
+docker compose exec --user hermes hermes bash -c "cd /opt/hermes && HERMES_HOME=/opt/data /opt/hermes/.venv/bin/python3 /tmp/step2_exchange.py"
+
+# 5. Restart and (optionally) smoke-test:
+docker compose restart hermes
+docker cp .\.codex-oauth\smoke_test.py hermes:/tmp/smoke_test.py
+docker compose exec --user hermes hermes bash -c "cd /opt/hermes && HERMES_HOME=/opt/data /opt/hermes/.venv/bin/python3 /tmp/smoke_test.py"
+```
+
+A working smoke test prints `HTTP 200` and an SSE `response.created` event.
+
+> **Important:** the callback URL contains a single-use auth code; never commit it.
+> `.gitignore` already excludes `.codex_*` artifacts. Tokens are stored in
+> `~/.hermes/auth.json` (provider `openai-codex`) and survive container rebuilds
+> because they live in the mounted data volume.
+
+The resulting config in `~/.hermes/config.yaml`:
+
+```yaml
+model:
+  base_url: https://chatgpt.com/backend-api/codex
+  default: gpt-5.5
+  provider: openai-codex
+```
 
 ## Install options
 
@@ -249,7 +317,8 @@ The bot's `CLIENT_ID`, `CLIENT_SECRET`, and `TENANT_ID` are reused — no new Az
 | `Dockerfile` | Extends upstream image, pre-installs Teams SDK + image tools (studio) |
 | `docker-compose.yml` | Service definition — ports, volumes, env vars |
 | `install.ps1` | One-command setup for Windows; also deploys the `studio` profile |
-| `teams-bot-setup.ps1` | Registers the Azure bot and starts ngrok |
+| `teams-bot-setup.ps1` | Registers the Azure bot and starts ngrok (default profile) |
+| `teams-bot-setup-studio.ps1` | Registers a 2nd bot for the studio profile (:3979) and wires it |
 | `profiles/studio/` | The `studio` photo-workflow profile (SOUL, skills, config, cron) |
 | `.env` *(generated)* | Compose vars: `HERMES_DATA`, dashboard credentials |
 | `.gitignore` | Excludes generated `.env` and data dirs |
