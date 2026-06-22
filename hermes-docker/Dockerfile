@@ -42,7 +42,13 @@ RUN apt-get update \
         webp \
         zip \
         unzip \
+        rclone \
  && rm -rf /var/lib/apt/lists/*
+
+# rclone gives the studio agent access to its own OneDrive (delegated, signed in
+# as the agent's M365 service account). The token lives in the volume at
+# /opt/data/profiles/studio/rclone.conf (see docs/agent-onedrive-setup.md), so it
+# survives rebuilds; only the binary comes from the image.
 
 # The s6-overlay init runs as root and switches to the hermes user
 # itself, so we do not need an explicit USER instruction here.

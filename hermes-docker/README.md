@@ -319,9 +319,10 @@ The bot's `CLIENT_ID`, `CLIENT_SECRET`, and `TENANT_ID` are reused — no new Az
 | `install.ps1` | One-command setup for Windows; also deploys the `studio` profile |
 | `teams-bot-setup.ps1` | Registers the Azure bot and starts ngrok (default profile) |
 | `teams-bot-setup-studio.ps1` | Registers a 2nd bot for the studio profile (:3979) and wires it |
-| `publish-studio-outbox.ps1` | Mirrors the studio outbox into OneDrive (for the Power Automate flow) |
+| `publish-studio-outbox.ps1` | (Legacy) mirrors the outbox into *your* OneDrive if the agent's own isn't wired |
 | `profiles/studio/` | The `studio` photo-workflow profile (SOUL, skills, config, cron) |
-| `docs/power-automate-studio-outbox.md` | Flow: watch outbox → upload ZIP to a Teams channel |
+| `docs/power-automate-studio-outbox.md` | Flow: watch OneDrive → upload ZIP to a Teams channel |
+| `docs/agent-onedrive-setup.md` | Give the studio agent its own OneDrive (rclone, one-time) |
 | `.env` *(generated)* | Compose vars: `HERMES_DATA`, dashboard credentials |
 | `.gitignore` | Excludes generated `.env` and data dirs |
 

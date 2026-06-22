@@ -24,19 +24,18 @@ ZIP into a Teams channel's Files → post a message announcing it.**
 The outbox is a local Docker volume on the host, so the cloud can't see it directly.
 Two ways to bridge it — pick one:
 
-### Option A (recommended, no extra license): OneDrive sync
-1. Create a synced folder, e.g. `OneDrive - evo\HermesStudioOutbox\`.
-2. Make the studio pipeline also drop ZIPs there. Easiest: a scheduled "publish" copy
-   on the host (Task Scheduler, every 5 min):
-   ```powershell
-   # publish-studio-outbox.ps1
-   $src = "$env:USERPROFILE\.hermes\outbox\studio"
-   $dst = "$env:OneDrive\HermesStudioOutbox"
-   robocopy $src $dst /E /XO /NJH /NJS /NDL | Out-Null
-   ```
-   (or point `package_zip.py --out` straight at the OneDrive path when you run live.)
-3. Trigger: **OneDrive for Business → When a file is created** (standard connector),
-   Folder = `/HermesStudioOutbox`, `includeSubfolders = Yes`.
+### Option A (recommended, no extra license): the agent's own OneDrive
+The studio agent has its own OneDrive (`hermes-ai@evo.com`, via rclone — see
+[agent-onedrive-setup.md](agent-onedrive-setup.md)) and, on **live** runs, pushes
+PIM-ready packages to `agent-od:HermesStudioOutbox/<date>/`. So the cloud already has
+the file — just watch that folder:
+
+1. Trigger: **OneDrive for Business → When a file is created**, connected as
+   `hermes-ai@evo.com`, Folder = `/HermesStudioOutbox`, `includeSubfolders = Yes`.
+
+That's it — no host-side copy. (Legacy alternative if you don't wire the agent's
+OneDrive: run [`../publish-studio-outbox.ps1`](../publish-studio-outbox.ps1) on the host
+to robocopy the outbox into *your* OneDrive, and point the trigger there instead.)
 
 ### Option B (faithful, premium): on-prem File System connector
 Watches the real outbox with no copies, but needs the **on-premises data gateway**

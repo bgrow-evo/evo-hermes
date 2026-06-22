@@ -126,9 +126,13 @@ Framework adapter limit). So deliver, in this order:
      /opt/data/outbox/studio/<date>/<Brand>_contact-sheet.png
    ```
    Then attach that PNG to the chat.
-3. **Reference the ZIP, don't try to attach it** — state the outbox path(s), e.g.
+3. **Push the package to your OneDrive (LIVE only)** — use the `agent-onedrive` skill
+   to `rclone copy` the day's ZIP + MANIFEST + contact sheet to
+   `agent-od:HermesStudioOutbox/<date>/`. A Power Automate flow watching that folder
+   uploads the ZIP into the Teams channel. **In DRY-RUN, skip this** and log it as
+   "would push to OneDrive" (it cascades to a channel post).
+4. **Reference the ZIP path too** — state the local outbox path, e.g.
    `/opt/data/outbox/studio/<date>/<Brand>_pim-ready.zip` (host:
-   `~/.hermes/outbox/studio/...`), and note the bot can't attach files — a human picks
-   it up from the outbox (or a Power Automate flow watching the outbox uploads it).
+   `~/.hermes/outbox/studio/...`), and note the bot itself can't attach files.
 
 Always state the resolved mode (DRY-RUN / LIVE) in the first line.
