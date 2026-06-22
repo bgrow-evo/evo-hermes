@@ -42,13 +42,22 @@ RUN apt-get update \
         webp \
         zip \
         unzip \
-        rclone \
+        curl \
+        ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# rclone gives the studio agent access to its own Azure Blob Storage container
-# (service-principal auth, headless). The credentials live in the volume at
-# /opt/data/profiles/studio/rclone.conf (see docs/agent-blob-setup.md), so they
-# survive rebuilds; only the binary comes from the image.
+# rclone gives the studio agent access to its own Azure Blob Storage container.
+# We install the official binary (NOT the distro package): Debian's rclone is too
+# old (v1.60) and only does service-principal auth via a file; inline azureblob
+# service-principal creds (client_id/client_secret/tenant) need rclone >= 1.64.
+# Credentials live in the volume at /opt/data/profiles/studio/rclone.conf
+# (see docs/agent-blob-setup.md), so they survive rebuilds; only the binary is baked.
+ARG RCLONE_VERSION=v1.74.3
+RUN curl -fsSL "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip" -o /tmp/rclone.zip \
+ && unzip -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
+ && chmod 0755 /usr/local/bin/rclone \
+ && rm /tmp/rclone.zip \
+ && /usr/local/bin/rclone version | head -1
 
 # The s6-overlay init runs as root and switches to the hermes user
 # itself, so we do not need an explicit USER instruction here.
