@@ -21,11 +21,12 @@ your delivery/scratch space, **not** evo's shared SharePoint or any team Drive.
 
 - Remote name: **`agent-blob`**  (the storage account)
 - Container: **`studio-outbox`**  (first path segment after the remote)
-- Config file (in the volume, persists across rebuilds): `/opt/data/profiles/studio/rclone.conf`
-- Always pass `--config`:
+- The config path is preset via the `RCLONE_CONFIG` env var
+  (`/opt/data/profiles/studio/rclone.conf`), so plain `rclone` already finds the
+  remote. Passing `--config "$RCLONE_CONFIG"` explicitly is harmless and recommended:
 
 ```bash
-RC="rclone --config /opt/data/profiles/studio/rclone.conf"
+RC="rclone --config $RCLONE_CONFIG"
 $RC lsd  agent-blob:                 # list containers -> auth works
 $RC ls   agent-blob:studio-outbox    # list blobs in the container
 ```
@@ -47,8 +48,27 @@ $RC copy /opt/data/outbox/studio/2026-06-22 "agent-blob:studio-outbox/2026-06-22
 $RC ls "agent-blob:studio-outbox/2026-06-22"
 ```
 
-Use `copy` (not `sync`). A Power Automate flow watching `studio-outbox` posts the ZIP
-into Teams (see `docs/power-automate-studio-outbox.md`, Option A).
+Use `copy` (not `sync`).
+
+## Posting a download link to the chat
+
+You can hand the user a direct download link for any blob — works in a **DM or a
+channel** (no Power Automate needed). A read-only, container-scoped SAS is preset in
+the env (`STUDIO_BLOB_BASE_URL` + `STUDIO_BLOB_READ_SAS`). Build the link by joining:
+
+```bash
+# after copying e.g. 2026-06-22/Smith_pim-ready.zip to the container:
+echo "$STUDIO_BLOB_BASE_URL/2026-06-22/Smith_pim-ready.zip?$STUDIO_BLOB_READ_SAS"
+```
+
+Post that URL in your reply. The recipient clicks it to download the ZIP directly from
+blob — no channel, no SharePoint, no extra connector. (The SAS is read-only and
+expires; if a link 403s, the SAS needs rotating — report it.) URL-encode the path
+segment if a filename contains spaces.
+
+A Power Automate / Logic App flow watching `studio-outbox` can also post links to a
+**channel** automatically (see `docs/power-automate-studio-outbox.md`); the link above
+is what you use for direct/DM delivery.
 
 ## Rules
 

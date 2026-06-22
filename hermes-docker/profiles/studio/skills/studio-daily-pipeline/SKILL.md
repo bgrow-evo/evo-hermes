@@ -128,12 +128,14 @@ Framework adapter limit). So deliver, in this order:
      /opt/data/outbox/studio/<date>/<Brand>_contact-sheet.png
    ```
    Then attach that PNG to the chat.
-3. **Push the package to your blob storage** — use the `agent-blob` skill to
-   `rclone copy` the day's ZIP + MANIFEST + contact sheet to
-   `agent-blob:studio-outbox/<date>/`. Do this in **both dry-run and live** (it's your
-   own storage). A Power Automate flow watching that container uploads the ZIP into
-   Teams; while testing, that flow should target a test channel so dry-run packages
-   don't hit production.
+3. **Push the package to your blob storage AND post a download link** — use the
+   `agent-blob` skill to `rclone copy` the day's ZIP + MANIFEST + contact sheet to
+   `agent-blob:studio-outbox/<date>/` (do this in **both dry-run and live** — it's your
+   own storage). Then build the read-only SAS download link for each ZIP
+   (`$STUDIO_BLOB_BASE_URL/<date>/<Brand>_pim-ready.zip?$STUDIO_BLOB_READ_SAS`) and
+   **include it in your chat reply** so the user can download directly — works in a DM
+   or channel. (A Power Automate flow watching the container can also post links to a
+   channel automatically.)
 4. **Reference the ZIP path too** — state the local outbox path, e.g.
    `/opt/data/outbox/studio/<date>/<Brand>_pim-ready.zip` (host:
    `~/.hermes/outbox/studio/...`), and note the bot itself can't attach files.
