@@ -17,6 +17,40 @@ You are running the evo photo workflow unattended, on a schedule. Your goal: get
 far as possible toward PIM-ready output without a human, and hand off a ZIP for the
 human-only steps. Never fabricate the result of a step you could not actually do.
 
+## Dry-run mode (CHECK THIS FIRST, every run)
+
+Before anything else, determine the mode:
+
+```bash
+test -f /opt/data/profiles/studio/DRY_RUN && echo DRY_RUN_ON || echo DRY_RUN_OFF
+```
+
+Also treat the run as dry-run if the trigger message contains `DRY RUN` /
+`--dry-run` (case-insensitive). State the resolved mode in your first line of output
+and in the manifest.
+
+**When DRY-RUN is ON, you must not write back to ANY external source.** Specifically
+FORBIDDEN:
+- Google Sheets: do **not** run the 📸 Images-menu refresh functions, do **not**
+  paste the Sheet ID into `CONFIG!B2`, do **not** change sharing/permissions, do
+  **not** edit any cell. Reading the report (incl. the read-only `gviz` CSV
+  endpoint) is allowed.
+- Fileserver / SharePoint / DAM: no uploads, no moves, no "Post Production to Edit"
+  drops, no edits to vendor portals. Browsing and **downloading** source images to
+  the local work dir is allowed (that is local, not a write-back).
+- Teams: no posts, no messages, no compose-box typing.
+- PIM: never (already out of scope).
+
+**ALLOWED in dry-run** (all local, reversible artifacts): download source images,
+process them, write to `work/` and the outbox ZIP + MANIFEST. The manifest must list,
+under "Would have written (skipped — dry-run):", every external write you skipped and
+exactly what it would have done.
+
+If any step's only path forward requires an external write, **skip it and record it**
+— do not find a workaround.
+
+Default safety: if you cannot determine the mode for any reason, assume DRY-RUN ON.
+
 ## Ground rules (read first, every run)
 
 Load, in order, from the bundled playbook at `./playbook/` (relative to this profile;
@@ -44,6 +78,8 @@ Refresh the missing-images report if it has not run today. The xlsx import needs
 + a human (cross-origin iframe) and OAuth is one-time — if you cannot reach the file,
 **record the blocker** and fall back: open the existing report and scan for unclaimed
 NEW rows to drive the rest of the run. Do not post to Teams on a human's behalf.
+**DRY-RUN:** skip the refresh entirely (it writes to the Sheet). Only *read* the
+existing report (gviz CSV) to find NEW rows; log the refresh as a skipped write.
 
 ### 2. Vendor Image Sourcing & SKUing  (`context/workflows/02-...md`)
 For unclaimed NEW rows, source images from the vendor DAMs (creds in this profile's
@@ -61,7 +97,8 @@ blocker if a DAM login fails — do not retry destructively.
 - Run `evo-image-processing` (`process_images.py`) per SKU into
   `work/<date>/<Brand>/Output/EB-XXXXXX-XXXX/` with `--main` and `--order`.
 - Route non-white/non-transparent main images to the "Complex main image clipping"
-  manual path — package what's clean, flag the rest.
+  manual path — package what's clean, flag the rest. **DRY-RUN:** do not upload the
+  complex-clip batch to the fileserver; just list those SKUs as a skipped write.
 
 ### 4. Package for PIM  (replaces the PIM-upload workflow)
 - Run `evo-image-processing` (`package_zip.py`) to build, per brand,

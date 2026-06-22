@@ -164,6 +164,23 @@ function Deploy-StudioProfile {
     New-Item -ItemType Directory -Force -Path (Join-Path $profileDir "work") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $DataDirAbs "outbox\studio") | Out-Null
 
+    # 4b. Seed dry-run ON once (safe default while testing). The pipeline refuses to
+    #     write back to external sources while DRY_RUN exists. Seeded only once: after
+    #     you delete DRY_RUN to go live, redeploys won't resurrect it.
+    $dryRun = Join-Path $profileDir "DRY_RUN"
+    $seeded = Join-Path $profileDir ".dryrun_seeded"
+    if (-not (Test-Path $seeded)) {
+        Set-Content -Path $dryRun -Encoding ascii -Value @(
+            "Dry-run flag for the studio daily pipeline."
+            "While this file exists, the pipeline must not write back to any external"
+            "source (Google Sheets, fileserver/SharePoint, vendor portals, Teams)."
+            "Local artifacts (downloaded images, processed JPGs, outbox ZIP) still run."
+            "Go live:  Remove-Item `"$dryRun`""
+        )
+        New-Item -ItemType File -Path $seeded -Force | Out-Null
+        Write-Ok "Seeded DRY_RUN (pipeline starts in dry-run; delete the flag to go live)."
+    }
+
     # 5. Apply config overrides (key/value lines), keeping generated config.yaml valid.
     $overrides = Join-Path $profileSrc "config.overrides"
     if (Test-Path $overrides) {

@@ -62,6 +62,27 @@ Because `~/.hermes` is the bind-mounted volume, the profile and its state persis
 across `docker compose build` / image rebuilds — the apt image tools come from the
 rebuilt image, the profile/playbook/cron from the volume.
 
+## Dry-run mode (testing)
+
+While a flag file exists, the daily pipeline reads everything but **writes back to no
+external source** — no Google Sheets refresh/sharing changes, no fileserver/DAM
+uploads, no Teams posts. It still produces local artifacts (downloaded images,
+processed JPGs, the outbox ZIP + `MANIFEST.md`) so you can inspect real output, and
+the manifest lists every external write it skipped.
+
+```powershell
+# status / turn ON
+docker exec hermes test -f /opt/data/profiles/studio/DRY_RUN; if ($?) { "DRY-RUN ON" } else { "LIVE" }
+docker exec hermes touch /opt/data/profiles/studio/DRY_RUN              # enable
+# go live (allow writes back to sources)
+docker exec hermes rm -f /opt/data/profiles/studio/DRY_RUN             # disable
+```
+
+`install.ps1` seeds dry-run **ON** once on first deploy. After you delete the flag to
+go live, redeploys won't resurrect it. You can also force a single dry-run from any
+trigger by including `DRY RUN` in the message. If the mode can't be determined, the
+pipeline assumes dry-run.
+
 ## Operate
 
 ```powershell
