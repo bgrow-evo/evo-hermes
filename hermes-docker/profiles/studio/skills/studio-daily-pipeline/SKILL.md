@@ -109,7 +109,26 @@ blocker if a DAM login fails — do not retry destructively.
   **"Upload these ZIPs to PIM (Workflow #4)."**
 - **Do not upload to PIM yourself.** Packaging is the end of your job.
 
-## Final output (the cron delivers this)
+## Final output / delivery to chat
 
-A short summary: date, brands/SKUs packaged, ZIP paths in the outbox, and a bulleted
-blocker list (what a human must still do). Lead with what is ready to upload.
+The Teams bot can send **text and images only — it cannot attach a `.zip`** (Bot
+Framework adapter limit). So deliver, in this order:
+
+1. **Post the MANIFEST inline** — paste the full body of
+   `/opt/data/outbox/studio/<date>/MANIFEST.md` as the chat message (it is text). Lead
+   with what is ready to upload, then the blocker list (what a human must still do).
+2. **Attach a contact-sheet image** — images *are* supported, so give a visual preview
+   of what you packaged. Build one per brand from the thumbnails with ImageMagick and
+   send it as an image attachment:
+   ```bash
+   montage /opt/data/profiles/studio/work/<date>/<Brand>/Output/*/thumbs/*.jpg \
+     -tile 4x -geometry 240x240+6+6 -title "<Brand> <date> (dry-run)" \
+     /opt/data/outbox/studio/<date>/<Brand>_contact-sheet.png
+   ```
+   Then attach that PNG to the chat.
+3. **Reference the ZIP, don't try to attach it** — state the outbox path(s), e.g.
+   `/opt/data/outbox/studio/<date>/<Brand>_pim-ready.zip` (host:
+   `~/.hermes/outbox/studio/...`), and note the bot can't attach files — a human picks
+   it up from the outbox (or a Power Automate flow watching the outbox uploads it).
+
+Always state the resolved mode (DRY-RUN / LIVE) in the first line.
