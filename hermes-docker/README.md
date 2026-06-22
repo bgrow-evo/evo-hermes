@@ -323,6 +323,8 @@ The bot's `CLIENT_ID`, `CLIENT_SECRET`, and `TENANT_ID` are reused — no new Az
 | `profiles/studio/` | The `studio` photo-workflow profile (SOUL, skills, config, cron) |
 | `docs/power-automate-studio-outbox.md` | Flow: watch blob container → upload ZIP to a Teams channel |
 | `provision-studio-blob.ps1` | One-shot: create Azure storage+SP and wire the agent's rclone `agent-blob` remote |
+| `deploy-blob-teams-flow.ps1` | Deploy the blob→Teams Logic App (scripted alternative to the PA cloud flow) |
+| `flows/blob-to-teams.logicapp.json` | ARM template for that Logic App (blob trigger → SAS link → Teams webhook) |
 | `docs/agent-blob-setup.md` | Give the studio agent its own Azure Blob storage (rclone + service principal) |
 | `.env` *(generated)* | Compose vars: `HERMES_DATA`, dashboard credentials |
 | `.gitignore` | Excludes generated `.env` and data dirs |

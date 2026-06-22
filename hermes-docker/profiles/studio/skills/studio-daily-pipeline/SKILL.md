@@ -41,10 +41,12 @@ FORBIDDEN:
 - Teams: no posts, no messages, no compose-box typing.
 - PIM: never (already out of scope).
 
-**ALLOWED in dry-run** (all local, reversible artifacts): download source images,
-process them, write to `work/` and the outbox ZIP + MANIFEST. The manifest must list,
-under "Would have written (skipped — dry-run):", every external write you skipped and
-exactly what it would have done.
+**ALLOWED in dry-run**: download source images, process them, write to `work/` and the
+outbox ZIP + MANIFEST, **and push the package to your own blob storage** (`agent-blob`)
+— that is your storage, used to test the delivery loop, not an evo shared system. The
+manifest must list, under "Would have written (skipped — dry-run):", every *external*
+write you skipped (Sheets, fileserver, Teams) and what it would have done. Tag the
+manifest title with "(dry-run)" so anything watching the blob can tell.
 
 If any step's only path forward requires an external write, **skip it and record it**
 — do not find a workaround.
@@ -126,11 +128,12 @@ Framework adapter limit). So deliver, in this order:
      /opt/data/outbox/studio/<date>/<Brand>_contact-sheet.png
    ```
    Then attach that PNG to the chat.
-3. **Push the package to your blob storage (LIVE only)** — use the `agent-blob` skill
-   to `rclone copy` the day's ZIP + MANIFEST + contact sheet to
-   `agent-blob:studio-outbox/<date>/`. A Power Automate flow watching that container
-   uploads the ZIP into the Teams channel. **In DRY-RUN, skip this** and log it as
-   "would push to blob" (it cascades to a channel post).
+3. **Push the package to your blob storage** — use the `agent-blob` skill to
+   `rclone copy` the day's ZIP + MANIFEST + contact sheet to
+   `agent-blob:studio-outbox/<date>/`. Do this in **both dry-run and live** (it's your
+   own storage). A Power Automate flow watching that container uploads the ZIP into
+   Teams; while testing, that flow should target a test channel so dry-run packages
+   don't hit production.
 4. **Reference the ZIP path too** — state the local outbox path, e.g.
    `/opt/data/outbox/studio/<date>/<Brand>_pim-ready.zip` (host:
    `~/.hermes/outbox/studio/...`), and note the bot itself can't attach files.

@@ -52,8 +52,9 @@ into Teams (see `docs/power-automate-studio-outbox.md`, Option A).
 
 ## Rules
 
-- **Dry-run:** pushing to blob triggers the downstream Teams post, so treat it as an
-  external delivery — **skip it in dry-run** and log it as "would push to blob". Only
-  push when LIVE. Read/list is always fine.
+- This is the agent's **own** storage, so pushing here is allowed in **both dry-run and
+  live** — it's how the delivery loop is tested. (To keep dry-run packages off a
+  production Teams channel, point the Power Automate flow at a test channel while
+  testing.) Tag dry-run manifests with "(dry-run)" so watchers can tell.
 - Push only finished PIM-ready artifacts (ZIP, manifest, contact sheet) — keep raw
   source images out of blob.

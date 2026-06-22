@@ -1,0 +1,137 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_comment": "Logic App: when a blob lands in <container>, mint a read SAS link and post it to a Teams Incoming Webhook. Scriptable equivalent of the Power Automate cloud flow in docs/power-automate-studio-outbox.md. Deployed by deploy-blob-teams-flow.ps1."
+  },
+  "parameters": {
+    "logicAppName":   { "type": "string",       "defaultValue": "studio-blob-to-teams" },
+    "location":       { "type": "string",       "defaultValue": "[resourceGroup().location]" },
+    "storageAccount": { "type": "string" },
+    "storageKey":     { "type": "securestring" },
+    "container":      { "type": "string",        "defaultValue": "studio-outbox" },
+    "folderId":       { "type": "string",        "metadata": { "description": "base64 of '%2f'+container; computed by the deploy script." } },
+    "teamsWebhookUrl":{ "type": "securestring",  "metadata": { "description": "Teams channel Incoming Webhook URL." } },
+    "sasValidDays":   { "type": "int",           "defaultValue": 7 }
+  },
+  "variables": {
+    "blobConnectionName": "[concat(parameters('logicAppName'), '-blob')]",
+    "blobConnId": "[resourceId('Microsoft.Web/connections', concat(parameters('logicAppName'), '-blob'))]",
+    "blobApiId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/azureblob')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('blobConnectionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "displayName": "[concat(parameters('storageAccount'), ' (studio)')]",
+        "api": { "id": "[variables('blobApiId')]" },
+        "parameterValues": {
+          "accountName": "[parameters('storageAccount')]",
+          "accessKey": "[parameters('storageKey')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [ "[variables('blobConnId')]" ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" },
+            "teamsWebhookUrl": { "type": "securestring" }
+          },
+          "triggers": {
+            "When_a_blob_is_added_or_modified": {
+              "type": "ApiConnection",
+              "recurrence": { "frequency": "Minute", "interval": 5 },
+              "splitOn": "@triggerBody()",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                "method": "get",
+                "path": "/v2/datasets/AccountNameFromSettings/triggers/batch/onupdatedfile",
+                "queries": {
+                  "folderId": "[parameters('folderId')]",
+                  "maxFileCount": 20,
+                  "checkBothCreatedAndModifiedDateTime": false
+                }
+              }
+            }
+          },
+          "actions": {
+            "Only_PIM_zips": {
+              "type": "If",
+              "expression": {
+                "and": [ { "endsWith": [ "@triggerBody()?['Name']", "_pim-ready.zip" ] } ]
+              },
+              "actions": {
+                "Create_SAS_link": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": { "connection": { "name": "@parameters('$connections')['azureblob']['connectionId']" } },
+                    "method": "post",
+                    "path": "/v2/datasets/AccountNameFromSettings/CreateSharedLinkByPath",
+                    "queries": { "path": "@triggerBody()?['Path']" },
+                    "body": {
+                      "Permissions": "Read",
+                      "ExpiryTime": "@addDays(utcNow(), parameters('sasValidDays'))"
+                    }
+                  }
+                },
+                "Post_to_Teams": {
+                  "type": "Http",
+                  "runAfter": { "Create_SAS_link": [ "Succeeded" ] },
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@parameters('teamsWebhookUrl')",
+                    "headers": { "Content-Type": "application/json" },
+                    "body": {
+                      "@@type": "MessageCard",
+                      "@@context": "http://schema.org/extensions",
+                      "themeColor": "0076D7",
+                      "summary": "PIM-ready package",
+                      "title": "📦 PIM-ready package available",
+                      "text": "@{triggerBody()?['Name']}",
+                      "potentialAction": [
+                        {
+                          "@@type": "OpenUri",
+                          "name": "Download ZIP",
+                          "targets": [ { "os": "default", "uri": "@{body('Create_SAS_link')?['WebUrl']}" } ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "else": { "actions": {} }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "teamsWebhookUrl": { "value": "[parameters('teamsWebhookUrl')]" },
+          "$connections": {
+            "value": {
+              "azureblob": {
+                "connectionId": "[variables('blobConnId')]",
+                "connectionName": "[variables('blobConnectionName')]",
+                "id": "[variables('blobApiId')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppName": { "type": "string", "value": "[parameters('logicAppName')]" }
+  }
+}

@@ -17,6 +17,15 @@ ZIP into a Teams channel's Files → post a message announcing it.**
 > library. Uploading there makes the file appear under the channel's **Files** tab.
 > 1:1 chats don't have a shared library, so target a **channel** for file delivery.
 
+> **Prefer a script?** A Power Automate *cloud flow* can't be created
+> non-interactively (connector consent). The scriptable equivalent is an Azure
+> **Logic App**: run [`../deploy-blob-teams-flow.ps1`](../deploy-blob-teams-flow.ps1)
+> (template [`../flows/blob-to-teams.logicapp.json`](../flows/blob-to-teams.logicapp.json)).
+> It watches the blob container, mints a read SAS link, and posts it to a Teams
+> **Incoming Webhook** — no OAuth connection to authorize. Only manual step: create the
+> Incoming Webhook in the channel and pass its URL. The portal steps below remain the
+> guaranteed-by-hand path if you'd rather click through it.
+
 ---
 
 ## Decide the trigger (how the cloud sees a local file)
