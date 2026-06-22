@@ -322,6 +322,7 @@ The bot's `CLIENT_ID`, `CLIENT_SECRET`, and `TENANT_ID` are reused — no new Az
 | `publish-studio-outbox.ps1` | (Legacy) mirrors the outbox into *your* OneDrive if the agent's own isn't wired |
 | `profiles/studio/` | The `studio` photo-workflow profile (SOUL, skills, config, cron) |
 | `docs/power-automate-studio-outbox.md` | Flow: watch blob container → upload ZIP to a Teams channel |
+| `provision-studio-blob.ps1` | One-shot: create Azure storage+SP and wire the agent's rclone `agent-blob` remote |
 | `docs/agent-blob-setup.md` | Give the studio agent its own Azure Blob storage (rclone + service principal) |
 | `.env` *(generated)* | Compose vars: `HERMES_DATA`, dashboard credentials |
 | `.gitignore` | Excludes generated `.env` and data dirs |
