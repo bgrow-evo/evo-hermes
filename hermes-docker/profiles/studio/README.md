@@ -134,8 +134,8 @@ outbox (`~/.hermes/outbox/studio/<date>/`) for manual/Power-Automate pickup.
 
 **Getting the ZIP into Teams.** The bot posts the MANIFEST text + a contact-sheet
 image into the chat, but it **cannot attach the `.zip`** (Teams adapter sends
-attachments text-only). To deliver the actual file, use the Power Automate flow in
-[../../docs/power-automate-studio-outbox.md](../../docs/power-automate-studio-outbox.md)
-— it watches the outbox and uploads new ZIPs to a Teams channel's Files. The
-[`publish-studio-outbox.ps1`](../../publish-studio-outbox.ps1) helper mirrors the
-outbox into OneDrive for the no-gateway trigger option.
+attachments text-only). So on live runs the agent pushes the package to its own
+**Azure Blob** container (`agent-blob:studio-outbox/<date>/`, via the `agent-blob`
+skill — see [../../docs/agent-blob-setup.md](../../docs/agent-blob-setup.md)), and a
+Power Automate flow ([../../docs/power-automate-studio-outbox.md](../../docs/power-automate-studio-outbox.md))
+watches that container and uploads new ZIPs to a Teams channel's Files.

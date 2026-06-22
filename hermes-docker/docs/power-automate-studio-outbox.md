@@ -24,18 +24,20 @@ ZIP into a Teams channel's Files → post a message announcing it.**
 The outbox is a local Docker volume on the host, so the cloud can't see it directly.
 Two ways to bridge it — pick one:
 
-### Option A (recommended, no extra license): the agent's own OneDrive
-The studio agent has its own OneDrive (`hermes-ai@evo.com`, via rclone — see
-[agent-onedrive-setup.md](agent-onedrive-setup.md)) and, on **live** runs, pushes
-PIM-ready packages to `agent-od:HermesStudioOutbox/<date>/`. So the cloud already has
-the file — just watch that folder:
+### Option A (recommended): the agent's own Azure Blob container
+The studio agent has its own Azure Blob container (`studio-outbox`, via rclone +
+service principal — see [agent-blob-setup.md](agent-blob-setup.md)) and, on **live**
+runs, pushes PIM-ready packages to `agent-blob:studio-outbox/<date>/`. The cloud already
+has the file — just watch that container:
 
-1. Trigger: **OneDrive for Business → When a file is created**, connected as
-   `hermes-ai@evo.com`, Folder = `/HermesStudioOutbox`, `includeSubfolders = Yes`.
+1. Trigger: **Azure Blob Storage → When a blob is added or modified (V2)**, connected to
+   the storage account (use the SP or an account key for the *connection*), Container =
+   `studio-outbox`. It polls ~1 min.
+2. Use **Get blob content (V2)** with the trigger's blob path to fetch bytes.
 
-That's it — no host-side copy. (Legacy alternative if you don't wire the agent's
-OneDrive: run [`../publish-studio-outbox.ps1`](../publish-studio-outbox.ps1) on the host
-to robocopy the outbox into *your* OneDrive, and point the trigger there instead.)
+No host-side copy, no per-user license. (Legacy alternative without blob: run
+[`../publish-studio-outbox.ps1`](../publish-studio-outbox.ps1) on the host to robocopy
+the outbox into *your* OneDrive and use the OneDrive "When a file is created" trigger.)
 
 ### Option B (faithful, premium): on-prem File System connector
 Watches the real outbox with no copies, but needs the **on-premises data gateway**
@@ -46,8 +48,8 @@ installed on the host + the **File System** premium connector.
    using the gateway.
 3. Trigger: **File System → When a file is created**, `Folder = \`, include subfolders.
 
-The rest of the flow is identical after the trigger; it just uses different "get file
-content" actions (OneDrive vs File System).
+The rest of the flow is identical after the trigger; it just uses a different "get
+content" action (Azure Blob vs File System).
 
 ---
 
@@ -57,9 +59,9 @@ content" actions (OneDrive vs File System).
 
 ### 1. Trigger
 Per Option A or B above. Output you'll use downstream:
-- File name → `triggerOutputs()?['headers']?['x-ms-file-name']` (File System) or the
-  OneDrive trigger's **File name** dynamic content.
-- File path / identifier → the trigger's **File identifier** / **Full path**.
+- File name → the Azure Blob trigger's **List of Files Name** / blob name dynamic
+  content (Option A), or `triggerOutputs()?['headers']?['x-ms-file-name']` (File System).
+- File path / identifier → the trigger's blob path / **File identifier**.
 
 ### 2. Condition — only PIM ZIPs
 Add a **Condition**:
@@ -75,7 +77,7 @@ test runs to a live channel, do one of:
   `contains(manifestText, 'DRY-RUN')` → Terminate when true.
 
 ### 4. Get file content
-- Option A: **OneDrive for Business → Get file content** (File = trigger File id).
+- Option A: **Azure Blob Storage → Get blob content (V2)** (Blob = trigger blob path).
 - Option B: **File System → Get file content** (File = trigger File path).
 
 ### 5. Upload into the Teams channel's Files
