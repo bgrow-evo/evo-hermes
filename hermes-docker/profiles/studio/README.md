@@ -131,3 +131,11 @@ Once wired, point the daily cron at the studio bot by setting `--deliver` to a
 reachable Teams target (e.g. a DM/channel id the studio bot has a conversation
 reference for). Until then the cron delivers to `local` and the ZIP lands in the
 outbox (`~/.hermes/outbox/studio/<date>/`) for manual/Power-Automate pickup.
+
+**Getting the ZIP into Teams.** The bot posts the MANIFEST text + a contact-sheet
+image into the chat, but it **cannot attach the `.zip`** (Teams adapter sends
+attachments text-only). To deliver the actual file, use the Power Automate flow in
+[../../docs/power-automate-studio-outbox.md](../../docs/power-automate-studio-outbox.md)
+— it watches the outbox and uploads new ZIPs to a Teams channel's Files. The
+[`publish-studio-outbox.ps1`](../../publish-studio-outbox.ps1) helper mirrors the
+outbox into OneDrive for the no-gateway trigger option.
