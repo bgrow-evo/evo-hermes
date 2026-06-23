@@ -31,6 +31,7 @@ def main() -> int:
     ap.add_argument("--src", required=True, help="dir tree to package (brand Output/ or daily dir)")
     ap.add_argument("--out", required=True, help="destination .zip path")
     ap.add_argument("--include-thumbs", action="store_true", help="include thumbs/ (default: excluded)")
+    ap.add_argument("--manifest", help="path to a MANIFEST.md to bundle at the zip root (optional)")
     args = ap.parse_args()
 
     src = Path(args.src)
@@ -54,15 +55,24 @@ def main() -> int:
     if not packaged:
         sys.exit(f"no PIM-ready (NN_*.jpg) files found under {src}")
 
+    manifest = Path(args.manifest) if args.manifest else None
+    if manifest and not manifest.is_file():
+        sys.exit(f"--manifest not found: {manifest}")
+
     total = 0
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for p in packaged:
             arc = p.relative_to(src)
             zf.write(p, arc)
             total += p.stat().st_size
+        if manifest:
+            zf.write(manifest, manifest.name)   # at the zip root
+            total += manifest.stat().st_size
 
     print(f"ZIP: {out}")
-    print(f"files: {len(packaged)}  uncompressed: {human(total)}")
+    print(f"files: {len(packaged) + (1 if manifest else 0)}  uncompressed: {human(total)}")
+    if manifest:
+        print(f"  + bundled manifest: {manifest.name}")
     by_dir: dict[str, int] = {}
     for p in packaged:
         by_dir[str(p.relative_to(src).parent)] = by_dir.get(str(p.relative_to(src).parent), 0) + 1

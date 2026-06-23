@@ -50,17 +50,19 @@ python3 scripts/process_images.py \
   full-res source, to decide shot type.
 - Other flags: `--canvas 1500`, `--quality 95`, `--bg 255`.
 
-`scripts/package_zip.py` — build the PIM-ready ZIP + manifest:
+`scripts/package_zip.py` — build the PIM-ready ZIP:
 
 ```bash
 python3 scripts/package_zip.py \
   --src "<brand Output dir or daily work dir>" \
-  --out "/opt/data/outbox/studio/<YYYY-MM-DD>/<brand>_pim-ready.zip"
+  --out "/opt/data/outbox/studio/<YYYY-MM-DD>/<brand>_pim-ready.zip" \
+  --manifest "/opt/data/outbox/studio/<YYYY-MM-DD>/MANIFEST.md"
 ```
 
-Writes the ZIP and prints a manifest (folders, file counts, total size). Only
-files matching `NN_*.jpg` are considered PIM-ready; the script warns about any
-unsequenced files it finds so nothing is silently dropped.
+Only files matching `NN_*.jpg` are packaged; the script warns about any unsequenced
+files so nothing is silently dropped. `--manifest <file>` (optional) bundles that file
+at the **zip root** — write the manifest *before* zipping if you want it included. The
+script prints a summary (folders, file counts, total size).
 
 ## Workflow
 

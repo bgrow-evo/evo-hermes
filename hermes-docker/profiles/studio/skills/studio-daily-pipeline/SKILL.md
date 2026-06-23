@@ -103,12 +103,15 @@ blocker if a DAM login fails — do not retry destructively.
   complex-clip batch to the fileserver; just list those SKUs as a skipped write.
 
 ### 4. Package for PIM  (replaces the PIM-upload workflow)
-- Run `evo-image-processing` (`package_zip.py`) to build, per brand,
-  `/opt/data/outbox/studio/<YYYY-MM-DD>/<Brand>_pim-ready.zip`.
-- Write `/opt/data/outbox/studio/<YYYY-MM-DD>/MANIFEST.md` covering: brands/SKUs
-  packaged, image counts, proposed-vs-confirmed order, complex-clip SKUs deferred to
-  Photoshop, and every blocker hit. End with the explicit human action:
+- **Write the manifest first** so it can be bundled into the ZIP:
+  `/opt/data/outbox/studio/<YYYY-MM-DD>/MANIFEST.md` covering brands/SKUs packaged,
+  image counts, proposed-vs-confirmed order, complex-clip SKUs deferred to Photoshop,
+  and every blocker hit. End it with the explicit human action:
   **"Upload these ZIPs to PIM (Workflow #4)."**
+- Then run `evo-image-processing` (`package_zip.py`) per brand to build
+  `/opt/data/outbox/studio/<YYYY-MM-DD>/<Brand>_pim-ready.zip`, passing
+  `--manifest /opt/data/outbox/studio/<YYYY-MM-DD>/MANIFEST.md` so the manifest is
+  bundled at the zip root alongside the SKU image folders.
 - **Do not upload to PIM yourself.** Packaging is the end of your job.
 
 ## Final output / delivery to chat
