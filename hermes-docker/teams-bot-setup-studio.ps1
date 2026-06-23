@@ -114,7 +114,7 @@ tunnels:
 }
 
 # --- studio wiring (connect the profile to the bot) --------------------------
-function Wire-StudioProfile {
+function Connect-StudioProfile {
     param([string]$ClientId, [string]$ClientSecret, [string]$TenantId, [int]$Port, [string]$Container, [string]$DataDir)
 
     if (-not ($ClientId -and $ClientSecret -and $TenantId)) {
@@ -164,7 +164,7 @@ function Wire-StudioProfile {
 
 # If the caller only wants to wire an already-created bot, do it and exit.
 if ($WireStudio -and -not $ForceCreate -and $TeamsClientId) {
-    Wire-StudioProfile -ClientId $TeamsClientId -ClientSecret $TeamsClientSecret -TenantId $TeamsTenantId -Port $Port -Container $Container -DataDir $DataDir
+    Connect-StudioProfile -ClientId $TeamsClientId -ClientSecret $TeamsClientSecret -TenantId $TeamsTenantId -Port $Port -Container $Container -DataDir $DataDir
     return
 }
 
@@ -186,7 +186,7 @@ function Resolve-Ngrok {
 
 # Extract the JSON payload from a teams CLI response (it prepends banners).
 function ConvertFrom-TeamsJson($raw) {
-    $text = ($raw | Out-String)
+    $text = ($raw | Out-String) -replace '\x1b\[[0-9;]*[mKJH]', ''
     $start = $text.IndexOf('[')
     $end   = $text.LastIndexOf(']')
     if ($start -lt 0 -or $end -lt $start) { return @() }
@@ -256,19 +256,41 @@ $publicUrl = Get-NgrokHttpsUrlForPort -Port $Port
 if ($publicUrl) {
     Write-Ok "Found an existing ngrok tunnel for port $Port : $publicUrl"
 } else {
-    Write-Warn2 "No tunnel forwarding to $Port found. Starting a dedicated ngrok agent..."
-    Write-Warn2 "NOTE: ngrok free tier allows only ONE agent. If the default bot's tunnel"
-    Write-Warn2 "      is running, this will fail -- use '-PrintNgrokConfig' for a single"
-    Write-Warn2 "      agent that serves both 3978 and 3979."
-    Start-Process $ngrok -ArgumentList "http", "$Port" -WindowStyle Minimized | Out-Null
-    for ($i = 0; $i -lt 20 -and -not $publicUrl; $i++) {
-        Start-Sleep -Seconds 1
-        $publicUrl = Get-NgrokHttpsUrlForPort -Port $Port
+    # Check if an ngrok agent is already running (default bot likely started it).
+    $agentRunning = $false
+    try { Invoke-RestMethod -Uri $ngrokApi -TimeoutSec 3 -ErrorAction Stop | Out-Null; $agentRunning = $true } catch { }
+
+    if ($agentRunning) {
+        # Agent is up — inject a new tunnel via the ngrok agent REST API.
+        # This works on free tier (one agent session, multiple tunnels within it).
+        Write-Warn2 "ngrok agent is running; adding a tunnel to port $Port via agent API..."
+        try {
+            $body = @{ proto = "http"; addr = "localhost:$Port"; name = "hermes-studio-$Port" } | ConvertTo-Json -Compress
+            $t = Invoke-RestMethod -Uri $ngrokApi -Method Post `
+                -ContentType "application/json" -Body $body -TimeoutSec 10 -ErrorAction Stop
+            $publicUrl = $t.public_url
+        } catch { }
+
+        if (-not $publicUrl) {
+            Write-Warn2 "Agent API tunnel add failed. Trying -PrintNgrokConfig workaround..."
+            Write-Warn2 "Run:  .\teams-bot-setup-studio.ps1 -PrintNgrokConfig"
+            Write-Warn2 "      Then restart ngrok with both tunnels in one config file."
+            throw "Could not add tunnel for port $Port to the running ngrok agent."
+        }
+        Write-Ok "Tunnel injected into existing agent: $publicUrl"
+    } else {
+        # No agent running — start ngrok normally targeting our port.
+        Write-Warn2 "Starting ngrok on port $Port (minimized window)..."
+        Start-Process $ngrok -ArgumentList "http", "$Port" -WindowStyle Minimized | Out-Null
+        for ($i = 0; $i -lt 20 -and -not $publicUrl; $i++) {
+            Start-Sleep -Seconds 1
+            $publicUrl = Get-NgrokHttpsUrlForPort -Port $Port
+        }
+        if (-not $publicUrl) {
+            throw "Could not read an ngrok public URL forwarding to $Port from $ngrokApi after 20s. Check the ngrok window."
+        }
+        Write-Ok "ngrok tunnel is up: $publicUrl"
     }
-    if (-not $publicUrl) {
-        throw "Could not read an ngrok public URL forwarding to $Port from $ngrokApi. Check the ngrok window (free-tier single-agent limit?) and try -PrintNgrokConfig."
-    }
-    Write-Ok "ngrok tunnel is up: $publicUrl"
 }
 
 $endpoint = "$publicUrl/api/messages"
@@ -311,7 +333,7 @@ if ($AppId) {
 
 # --- 5. Optionally wire the studio profile now -------------------------------
 if ($WireStudio) {
-    Wire-StudioProfile -ClientId $TeamsClientId -ClientSecret $TeamsClientSecret -TenantId $TeamsTenantId -Port $Port -Container $Container -DataDir $DataDir
+    Connect-StudioProfile -ClientId $TeamsClientId -ClientSecret $TeamsClientSecret -TenantId $TeamsTenantId -Port $Port -Container $Container -DataDir $DataDir
 }
 
 # --- 6. Verify the tunnel reaches the local bot -----------------------------

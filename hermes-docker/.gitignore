@@ -3,3 +3,11 @@
 
 # In case anyone points the data dir here
 .hermes/
+
+# Codex OAuth runtime artifacts — may contain auth codes / token fragments
+.codex-oauth/*.callback.txt
+.codex-oauth/*.result.txt
+**/.codex_callback.txt
+**/.codex_pkce.json
+**/.codex_result.txt
+**/.codex_smoke.txt
