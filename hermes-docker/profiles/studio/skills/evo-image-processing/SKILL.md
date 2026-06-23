@@ -28,18 +28,26 @@ mechanics, not the ordering decisions.
 - **Numeric-prefix naming:** `01_<original>.jpg`, `02_…` — drives PIM upload order.
 - Optional **thumbnails** (~400px) for token-cheap visual inspection via the Read tool.
 
-## Tools (run with system python3 in this container)
+## Tools
+
+Run these with the **hermes venv python** — it has Pillow; the system `python3` may
+not. Use the full path `/opt/hermes/.venv/bin/python3` (stable across rebuilds).
 
 `scripts/process_images.py` — process one SKU folder:
 
 ```bash
-python3 scripts/process_images.py \
+PY=/opt/hermes/.venv/bin/python3
+$PY scripts/process_images.py \
   --src  "<Original/EB-XXXXXX-XXXX>" \
   --out  "<Output/EB-XXXXXX-XXXX>" \
   --main "<main-source-filename>" \
   --order "fileA.png,fileB.png,fileC.png" \
   --thumbs
 ```
+
+Output files are named `NN_<source-stem>.jpg` where `NN` is the order position. A
+leading numeric prefix already on the source name is **stripped** so you get
+`01_Smith-Riptide….jpg`, not `01_01_…` (pass `--keep-source-prefix` to retain it).
 
 - `--main` names the source file to treat as the main shot (white-flatten + tight
   crop). Omit only if there is genuinely no white-bg/Transp candidate.
@@ -53,7 +61,7 @@ python3 scripts/process_images.py \
 `scripts/package_zip.py` — build the PIM-ready ZIP:
 
 ```bash
-python3 scripts/package_zip.py \
+/opt/hermes/.venv/bin/python3 scripts/package_zip.py \
   --src "<brand Output dir or daily work dir>" \
   --out "/opt/data/outbox/studio/<YYYY-MM-DD>/<brand>_pim-ready.zip" \
   --manifest "/opt/data/outbox/studio/<YYYY-MM-DD>/MANIFEST.md"

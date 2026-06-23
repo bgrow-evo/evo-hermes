@@ -13,12 +13,17 @@ decisions in the workflow — pass them in via --order / --main.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
 from PIL import Image, ImageChops
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".bmp"}
+
+# Vendor files often already carry a numeric order prefix (e.g. "01_", "03_").
+# We assign our own order prefix, so strip any leading one to avoid "01_03_name".
+LEADING_NUM_PREFIX = re.compile(r"^\d{1,3}_")
 
 
 def list_sources(src: Path) -> list[Path]:
@@ -118,7 +123,7 @@ def process(args: argparse.Namespace) -> int:
                 flat = flatten_to_white(raw, args.bg)
             final = fit_to_canvas(flat, args.canvas, args.bg)
 
-        stem = path.stem
+        stem = path.stem if args.keep_source_prefix else LEADING_NUM_PREFIX.sub("", path.stem)
         name = f"{idx:02d}_{stem}.jpg"
         dest = out / name
         final.save(dest, "JPEG", quality=args.quality, optimize=True)
@@ -146,6 +151,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bg", type=int, default=255, help="background grey value (default 255=white)")
     p.add_argument("--thumbs", action="store_true", help="also write ~400px thumbnails")
     p.add_argument("--thumb-size", type=int, default=400, help="thumbnail max edge px")
+    p.add_argument("--keep-source-prefix", action="store_true",
+                   help="keep any leading numeric prefix on source names (default: strip it)")
     return p
 
 
