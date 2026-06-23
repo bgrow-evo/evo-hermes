@@ -46,7 +46,9 @@ param(
     [string]$Container      = "studio-outbox",
     [string]$SpName         = "sp-hermes-studio-blob",
     [string]$ContainerName  = "hermes",
-    [string]$RemoteName     = "agent-blob"
+    [string]$RemoteName     = "agent-blob",
+    [int]$SasValidDays      = 365,
+    [string]$DataDir        = (Join-Path $env:USERPROFILE ".hermes")
 )
 
 $ErrorActionPreference = "Stop"
@@ -139,8 +141,51 @@ foreach ($i in 1..8) {
 if ($verified) { Ok "Verified: agent can read/write '${RemoteName}:$Container'." }
 else { Warn "Could not verify yet. Retry later: docker exec $ContainerName rclone --config $RcloneConfig ls ${RemoteName}:$Container" }
 
+# --- 5. mint a read-only container SAS + write the studio profile .env ------
+# The agent posts direct download links built from a read-only, container-scoped
+# SAS (least privilege; the account key is used only here to sign, never stored in
+# the agent). RCLONE_CONFIG makes plain `rclone` find the volume config.
+Step "Minting read-only SAS + writing studio .env"
+$base   = "https://$StorageAccount.blob.core.windows.net/$Container"
+$sas    = $null
+$expiry = $null
+$key = az storage account keys list -g $ResourceGroup -n $StorageAccount --query "[0].value" -o tsv
+if ($LASTEXITCODE -eq 0 -and $key) {
+    $expiry = (Get-Date).ToUniversalTime().AddDays($SasValidDays).ToString('yyyy-MM-ddTHH:mmZ')
+    $sas = az storage container generate-sas --account-name $StorageAccount --account-key $key `
+        -n $Container --permissions rl --expiry $expiry --https-only -o tsv
+    if ($LASTEXITCODE -ne 0) { $sas = $null }
+}
+
+$envPath = Join-Path $DataDir "profiles\studio\.env"
+if (Test-Path $envPath) {
+    $keep = @(Get-Content $envPath | Where-Object { $_ -notmatch '^(RCLONE_CONFIG|STUDIO_BLOB_BASE_URL|STUDIO_BLOB_READ_SAS)=' })
+} else {
+    New-Item -ItemType Directory -Force -Path (Split-Path $envPath) | Out-Null
+    $keep = @()
+}
+$block = @(
+    ""
+    "# Blob delivery (written by provision-studio-blob.ps1)"
+    "RCLONE_CONFIG=$RcloneConfig"
+    "STUDIO_BLOB_BASE_URL=$base"
+)
+if ($sas) {
+    $block += "STUDIO_BLOB_READ_SAS=$sas"
+    Ok "Read-only SAS minted (rl, expires $expiry)."
+} else {
+    Warn "Could not mint SAS (need storage listKeys rights). Direct download links"
+    Warn "will be unavailable until STUDIO_BLOB_READ_SAS is set in $envPath."
+}
+Set-Content -Path $envPath -Value ($keep + $block) -Encoding ascii
+Ok "Wrote blob env vars to $envPath"
+
+# Restart the studio gateway so it loads the new env (RCLONE_CONFIG + SAS).
+docker exec $ContainerName hermes -p studio gateway restart | Out-Null
+Ok "Studio gateway restarted to load the new env."
+
 # --- reference copy of values (gitignored volume location) ------------------
-$refPath = Join-Path $env:USERPROFILE ".hermes\profiles\studio\.blob-credentials.json"
+$refPath = Join-Path $DataDir "profiles\studio\.blob-credentials.json"
 @{
     account        = $StorageAccount
     container      = $Container
@@ -149,6 +194,9 @@ $refPath = Join-Path $env:USERPROFILE ".hermes\profiles\studio\.blob-credentials
     client_secret  = $clientSecret
     resource_group = $ResourceGroup
     scope          = $scope
+    base_url       = $base
+    read_sas       = $sas
+    sas_expiry     = $expiry
 } | ConvertTo-Json | Set-Content -Path $refPath -Encoding ascii
 
 # --- summary ----------------------------------------------------------------
@@ -159,6 +207,10 @@ Write-Host "   container:  $Container"
 Write-Host "   tenant:     $tenant"
 Write-Host "   client_id:  $clientId"
 Write-Host "   rclone:     ${RemoteName}:$Container   (config in volume rclone.conf)"
+if ($sas) {
+    Write-Host "   dl links:   $base/<path>?<SAS>   (read-only, expires $expiry)"
+    Write-Host "               agent posts these in chat after pushing to blob."
+}
 Write-Host " Reference values (incl. secret) saved to:" -ForegroundColor Yellow
 Write-Host "   $refPath  (gitignored; treat as a credential)" -ForegroundColor Yellow
 Write-Host " For the Power Automate connection, use this storage account (account key or the SP above)." -ForegroundColor White

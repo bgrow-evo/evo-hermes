@@ -63,11 +63,25 @@ read/write its blob storage. The `agent-blob` skill documents day-to-day command
 studio pipeline pushes PIM-ready packages to `agent-blob:studio-outbox/<date>/` on
 **live** runs.
 
+## Download links (DM or channel)
+
+`provision-studio-blob.ps1` also mints a **read-only, container-scoped SAS** (valid
+`-SasValidDays`, default 365) and writes three vars into the studio profile `.env`:
+`RCLONE_CONFIG` (so plain `rclone` finds the remote), `STUDIO_BLOB_BASE_URL`, and
+`STUDIO_BLOB_READ_SAS`. The agent builds a direct download link as
+`$STUDIO_BLOB_BASE_URL/<path>?$STUDIO_BLOB_READ_SAS` and posts it in chat — works in a
+DM or a channel, no Power Automate needed, and the **account key never reaches the
+agent** (it is used only on the host to sign the SAS). Rotate the link credential by
+re-running the script (or `az storage container generate-sas … --permissions rl`).
+
 ## Notes
 
 - **Token refresh:** rclone acquires/renews bearer tokens from the service principal
   automatically. Re-do Step 2 only if the SP secret is rotated/expired
   (`az ad sp credential reset`).
+- **SAS expiry:** the download-link SAS expires (default 1 year). When links start
+  returning 403, re-run `provision-studio-blob.ps1` to mint a fresh one (it replaces
+  the `.env` value and restarts the gateway).
 - **Least privilege:** the role is scoped to this one storage account. Scope it to just
   the container instead by using the container's resource id as `--scopes`.
 - **Security:** the SP `client_secret` in `rclone.conf` is a credential. It lives only
