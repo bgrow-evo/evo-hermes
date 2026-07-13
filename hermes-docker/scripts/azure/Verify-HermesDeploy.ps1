@@ -36,7 +36,7 @@ az containerapp revision list `
 
 Write-Host ""
 Write-Host "Health check: https://$Fqdn$HealthPath" -ForegroundColor Cyan
-Write-Host "  (ACA external ingress port 443 -> container port 3979)" -ForegroundColor DarkGray
+Write-Host "  (ACA external ingress port 443 -> hermes-aca-proxy :8080)" -ForegroundColor DarkGray
 
 $attempt = 0
 $success = $false
@@ -68,4 +68,5 @@ if (-not $success) {
 
 Write-Host ""
 Write-Host "Deployment verified." -ForegroundColor Green
-Write-Host "  Teams bot endpoint active: https://$Fqdn/api/messages" -ForegroundColor Green
+Write-Host "  Default bot : https://$Fqdn/default/api/messages" -ForegroundColor Green
+Write-Host "  Studio bot  : https://$Fqdn/studio/api/messages" -ForegroundColor Green
