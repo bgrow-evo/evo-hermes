@@ -11,3 +11,6 @@
 **/.codex_pkce.json
 **/.codex_result.txt
 **/.codex_smoke.txt
+
+# Microsoft Graph delegated token cache — contains refresh tokens (secrets)
+**/.graph_user_token_cache.json

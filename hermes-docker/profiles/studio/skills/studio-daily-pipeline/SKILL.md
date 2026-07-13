@@ -117,7 +117,10 @@ blocker if a DAM login fails — do not retry destructively.
 ## Final output / delivery to chat
 
 The Teams bot can send **text and images only — it cannot attach a `.zip`** (Bot
-Framework adapter limit). So deliver, in this order:
+Framework adapter limit). Delivery depends on the context: **interactive** (live DM/channel
+conversation you're replying into) vs. **unattended** (cron / private channel).
+
+### Interactive: DM or standard channel (live conversation)
 
 1. **Post the MANIFEST inline** — paste the full body of
    `/opt/data/outbox/studio/<date>/MANIFEST.md` as the chat message (it is text). Lead
@@ -144,3 +147,26 @@ Framework adapter limit). So deliver, in this order:
    `~/.hermes/outbox/studio/...`), and note the bot itself can't attach files.
 
 Always state the resolved mode (DRY-RUN / LIVE) in the first line.
+
+### Unattended: private channel or cron (no live conversation)
+
+For the **private "Hermes POC" channel** (or any cron-driven delivery where there is no
+active conversation to reply into), use the **`agent-teams-post`** skill instead:
+
+1. Build the MANIFEST and ZIP same as above (steps 1–4 above still apply).
+2. Instead of replying via the Bot Framework (which requires an active conversation),
+   use `agent-teams-post` to post **proactively** to the fixed team/channel:
+   ```python
+   post_channel_message.py --text "Daily summary: <manifest excerpt>\nDownload: <sas-link>"
+   ```
+   This uses **delegated Microsoft Graph** auth as `hermes-ai@evo.com` (a real user, not the
+   bot), so it works in private channels where the bot cannot.
+
+See `docs/agent-teams-post-setup.md` for one-time provisioning (Entra app, device-code
+sign-in) and `skills/agent-teams-post/` for commands.
+
+**Rules:**
+- **Do NOT post in dry-run** — same rule as the bot path. Check `DRY_RUN` flag first.
+- **Interactive vs. unattended:** only use this skill when there is no live conversation to
+  reply into. If you're in a DM with a user, use the bot reply above instead (simpler,
+  no separate OAuth setup needed).

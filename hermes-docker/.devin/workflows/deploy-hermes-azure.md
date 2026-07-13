@@ -1,45 +1,45 @@
 ---
-description: Deploy or redeploy Hermes agent to Azure Container Apps (Playground), migrate local volume to Azure Files, and update the Hermes Studio Teams bot endpoint
+description: Deploy Hermes to Azure Container Apps (ACA) with both default and studio Teams bots via a shared proxy, using Standard Azure Files as a backing store
 ---
 
-# Deploy Hermes to Azure Container Apps
+# Deploy Hermes to Azure Container Apps (Standard Storage)
 
 Scripts location: `scripts/azure/`
 
+## Architecture
+
+Two Hermes profiles (default + studio) run in one ACA container. A Python proxy on port 8080
+routes `/default/*` and `/studio/*` to each profile's gateway (3978 and 3979 respectively).
+Live application data runs on ACA `EmptyDir` at `/opt/data` (POSIX-compatible for Linux
+permissions). Durable state syncs to Standard Azure Files SMB at `/mnt/hermes-persist`.
+
 | Resource | Name |
 |---|---|
-| Subscription (default) | `Playground` |
+| Subscription | `Playground` |
 | Resource Group | `rg-hermes-sbx` |
 | ACR | `acrhermessbx` |
-| Storage Account | `sthermessbxwu2` |
-| Azure Files share | `hermes-data` → mounted at `/opt/data` |
-| ACA Environment | `aca-env-hermes-sbx-wu2` |
-| Container App | `aca-hermes` |
-| External port | `3979` (studio Teams bot + `/health`) |
+| Storage Account (Standard LRS) | `sthermessbxwu2` |
+| Azure Files share | `hermes-data` → `/mnt/hermes-persist` (durable store) |
+| ACA Environment | `aca-env-hermes-nfs-sbx-wu2` |
+| Container App | `aca-hermes-nfs` |
+| Proxy port | `8080` → externally 443 (ingress) |
 | Location | `westus2` |
-
-**Architecture note**: ACA external ingress (HTTPS 443) forwards to container port `3979`
-(the Hermes studio gateway that serves both `/api/messages` for Teams and `/health`).
-The main gateway API (8642) and dashboard (9119) are internal-only.
-
----
 
 ## Routine redeploy
 
 ```powershell
-.\scripts\azure\Deploy-HermesAzure.ps1 -Push
+.\scripts\azure\Deploy-HermesStandardStorage.ps1 -Push -SkipPrompt
 ```
 
 The script will:
-1. Prompt to confirm Azure subscription (default `AzureSandbox`)
-2. Build and push a new image (tagged with git SHA)
-3. Update the container app to a new revision
-4. Call `teams app update 521aaadb-ab96-4275-be9e-37bdb285ffc8 --endpoint https://<fqdn>/api/messages`
-5. Verify health at `https://<fqdn>/health`
+1. Build and push a new image (tagged with git SHA)
+2. Update both gateway Services config, Azure Files volumes, and revision
+3. Call `teams app update` for both default and studio bots
+4. Verify health at `/health` via the proxy
 
 To deploy a specific tag without rebuilding:
 ```powershell
-.\scripts\azure\Deploy-HermesAzure.ps1 -Push -ImageTag abc1234 -SkipBuild
+.\scripts\azure\Deploy-HermesStandardStorage.ps1 -Push -ImageTag abc1234 -SkipBuild -SkipPrompt
 ```
 
 ---
@@ -49,95 +49,79 @@ To deploy a specific tag without rebuilding:
 ### 1. Bootstrap Azure resources
 
 ```powershell
-.\scripts\azure\Initialize-HermesPlatform.ps1
+.\scripts\azure\Initialize-HermesPlatform.ps1 -SkipPrompt
 ```
 
-Creates: Resource Group, ACR, Storage Account, Azure File Share (`hermes-data`).
+Creates: Resource Group, ACR, Storage Account (Standard_LRS), Azure File Share (`hermes-data`).
 Grants current user: `AcrPush`, `Container Registry Tasks Contributor`, `Storage File Data SMB Share Contributor`.
-
-Verify:
-```powershell
-az resource list --resource-group rg-hermes-sbx --output table
-```
 
 ### 2. Migrate local volume to Azure Files
 
-This is the **critical step** — it moves your `~/.hermes` data (auth tokens,
-profile configs, rclone.conf, etc.) to the Azure Files share that the container
-will mount as `/opt/data`.
+Move `~/.hermes` (auth tokens, profile configs, rclone.conf, etc.) to the Azure Files share:
 
 ```powershell
-# Preview what will be uploaded
-.\scripts\azure\Migrate-HermesVolume.ps1 -DryRun
-
-# Perform the upload
-.\scripts\azure\Migrate-HermesVolume.ps1
+.\scripts\azure\Migrate-HermesVolume.ps1 -SkipPrompt
 ```
-
-What gets migrated from `C:\Users\bgrow\.hermes`:
-- `auth.json` — LLM auth tokens (OpenAI Codex)
-- `profiles/studio/.env` — Teams bot credentials, allowed users
-- `profiles/studio/config.yaml` — model config
-- `profiles/studio/rclone.conf` — Azure Blob storage config
-- `.env` — global Hermes env (Codex account ID etc.)
 
 ### 3. Build the image
 
 ```powershell
-.\scripts\azure\Build-HermesImage.ps1
+.\scripts\azure\Build-HermesImage.ps1 -SkipPrompt
 ```
 
-### 4. First deploy
+### 4. First deploy (sets up ACA environment + container app)
 
 ```powershell
-.\scripts\azure\Deploy-HermesAzure.ps1 -Setup
+.\scripts\azure\Deploy-HermesStandardStorage.ps1 -Setup -SkipPrompt
 ```
 
-This creates the ACA environment, registers Azure Files storage, and creates
-the container app with the volume mounted at `/opt/data`. Takes ~5 minutes.
+This creates the ACA environment, registers Azure Files storage, and creates the container app
+with both EmptyDir (live) and Azure Files (durable) volume mounts. Takes ~5 minutes.
 
-### 5. Verify Teams bot is reachable
+### 5. Verify both Teams bots are reachable
 
 ```powershell
 .\scripts\azure\Verify-HermesDeploy.ps1
 ```
 
-The Hermes Studio bot in Teams should now respond. Test by sending it a message.
+Test by sending messages to both bots in Teams.
 
 ---
 
-## Teams bot details
+## Teams bots
 
-- **Bot name**: Hermes Studio
-- **Teams App ID**: `521aaadb-ab96-4275-be9e-37bdb285ffc8`
-- **Endpoint path**: `/api/messages` on port 3979 (mapped to `https://<fqdn>/api/messages`)
-- **The Deploy script calls this automatically** after every deploy
+| Bot | App ID | Endpoint |
+|---|---|---|
+| Hermes (default) | `3146b701-6559-4671-b9d9-91e7508884b1` | `/default/api/messages` |
+| Hermes Studio | `521aaadb-ab96-4275-be9e-37bdb285ffc8` | `/studio/api/messages` |
 
-Manual update command if needed:
+The Deploy script updates both automatically. Manual update if needed:
 ```powershell
-$fqdn = az containerapp show -n aca-hermes -g rg-hermes-sbx --query "properties.configuration.ingress.fqdn" -o tsv
-teams app update 521aaadb-ab96-4275-be9e-37bdb285ffc8 --endpoint "https://$fqdn/api/messages"
+$fqdn = az containerapp show -n aca-hermes-nfs -g rg-hermes-sbx --query "properties.configuration.ingress.fqdn" -o tsv
+teams app update 3146b701-6559-4671-b9d9-91e7508884b1 --endpoint "https://$fqdn/default/api/messages"
+teams app update 521aaadb-ab96-4275-be9e-37bdb285ffc8  --endpoint "https://$fqdn/studio/api/messages"
 ```
 
 ---
 
 ## Re-auth (LLM tokens expire)
 
-The OpenAI Codex OAuth tokens live in the Azure Files volume (`/opt/data/auth.json`).
-When they expire, run the PKCE re-auth from **inside the running ACA container**:
+OpenAI Codex OAuth tokens live in the Azure Files volume (`/opt/data/auth.json`).
+When they expire, run the PKCE re-auth from inside the running ACA container:
 
 ```powershell
-# Get a shell in the container
-az containerapp exec --name aca-hermes --resource-group rg-hermes-sbx --command /bin/bash
-
+az containerapp exec -n aca-hermes-nfs -g rg-hermes-sbx --command /bin/bash
 # Then inside the container, follow the hermes-docker README "Re-auth steps" section
 ```
 
-Or: update the token locally in `~/.hermes/auth.json` and re-run `Migrate-HermesVolume.ps1`,
-then restart the container:
+Or: update locally and re-migrate:
 ```powershell
-$rev = az containerapp show -n aca-hermes -g rg-hermes-sbx --query properties.latestRevisionName -o tsv
-az containerapp revision restart -n aca-hermes -g rg-hermes-sbx --revision $rev
+# Edit ~/.hermes/auth.json locally
+.\scripts\azure\Migrate-HermesVolume.ps1
+
+# Restart to pick up the new token
+$rev = az containerapp show -n aca-hermes-nfs -g rg-hermes-sbx --query properties.latestRevisionName -o tsv
+az containerapp revision restart -n aca-hermes-nfs -g rg-hermes-sbx --revision $rev
 ```
 
 ---
@@ -146,30 +130,31 @@ az containerapp revision restart -n aca-hermes -g rg-hermes-sbx --revision $rev
 
 ```powershell
 # Tail live logs
-az containerapp logs show -n aca-hermes -g rg-hermes-sbx --follow
+az containerapp logs show -n aca-hermes-nfs -g rg-hermes-sbx --follow
 
-# List revisions and their image tags
-az containerapp revision list -n aca-hermes -g rg-hermes-sbx `
-  --query "[].{Revision:name, Active:properties.active, Image:properties.template.containers[0].image}" `
+# Revision status
+az containerapp revision list -n aca-hermes-nfs -g rg-hermes-sbx `
+  --query "[].{Revision:name, Health:properties.healthState, Active:properties.active}" `
   --output table
 
-# Check Azure Files share contents
-$key = az storage account keys list --account-name sthermessbxwu2 -g rg-hermes-sbx --query "[0].value" -o tsv
-az storage file list --share-name hermes-data --account-name sthermessbxwu2 --account-key $key --output table
+# Get the container app FQDN
+$fqdn = az containerapp show -n aca-hermes-nfs -g rg-hermes-sbx --query "properties.configuration.ingress.fqdn" -o tsv
+Write-Host "Proxy (ingress):  https://$fqdn/"
+Write-Host "Default bot:      https://$fqdn/default/api/messages"
+Write-Host "Studio bot:       https://$fqdn/studio/api/messages"
+Write-Host "Health check:     https://$fqdn/health"
 
-# Get the live Teams bot endpoint URL
-$fqdn = az containerapp show -n aca-hermes -g rg-hermes-sbx --query "properties.configuration.ingress.fqdn" -o tsv
-Write-Host "Teams endpoint: https://$fqdn/api/messages"
+# Restart the active revision
+$rev = az containerapp show -n aca-hermes-nfs -g rg-hermes-sbx --query properties.latestRevisionName -o tsv
+az containerapp revision restart -n aca-hermes-nfs -g rg-hermes-sbx --revision $rev
 ```
 
 ---
 
 ## Troubleshooting
 
-- **Health check times out**: Hermes image is large and has a long cold start (~3-5 min). Wait and retry.
-- **Teams bot not responding**: Check that the endpoint was updated. Run `teams app update` manually (see above).
-- **Container exits immediately**: Check logs with `az containerapp logs show`. Most likely: missing auth.json or profile config in Azure Files volume — re-run `Migrate-HermesVolume.ps1`.
-- **Volume not mounted**: Ensure `az containerapp env storage set` ran successfully during `-Setup`. Re-run `Deploy-HermesAzure.ps1 -Setup` — it is idempotent.
-- **AcrPull fails on first setup**: Managed identity is created during ACA deployment. Run `-Setup` a second time.
-- **Teams CLI not found**: `npm install -g '@microsoft/teams.cli@preview'` (needs Node via NVM).
-- **Wrong subscription at prompt**: Type the exact subscription name at the selection prompt.
+- **Health check fails / bots not responding**: Check logs with `az containerapp logs show`. Most common: missing auth tokens or profile config in Azure Files — re-run `Migrate-HermesVolume.ps1` and restart.
+- **Snapshot sync warnings in logs**: Expected if Azure Files is under load. The sync includes a retry loop and should eventually succeed. If failures persist after 10+ cycles, contact support.
+- **Teams endpoint update fails**: Ensure `teams` CLI is installed (`npm install -g '@microsoft/teams.cli@preview'`). Check subscription with `az account show --query name`.
+- **Container cold-start timeout**: Hermes image is large (~4-5 min first boot). Wait and retry health check.
+- **ACR pull fails on first setup**: Managed identity is auto-created during ACA deployment. Re-run `-Setup` if it fails on first try (idempotent).
