@@ -1,10 +1,10 @@
-# Hermes Agent — evo custom image
+# Hermes Agent - evo custom image
 #
 # Extends the official Nous Research image with the Microsoft Teams SDK
 # pre-installed so the gateway never needs to lazy-install at runtime.
 #
 # Versions are pinned to match what Hermes requests in tools/lazy_deps.py
-# (LAZY_DEPS["platform.teams"]).  If you upgrade the base image and Hermes
+# (LAZY_DEPS["platform.teams"]). If you upgrade the base image and Hermes
 # changes these pins, update them here to match and rebuild.
 #
 # Build (done automatically by install.ps1 / docker compose):
@@ -24,16 +24,18 @@ USER root
 # import time because the wheels are already on disk.
 RUN uv pip install --python /opt/hermes/.venv --no-cache \
     "microsoft-teams-apps==2.0.13.4" \
-    "aiohttp==3.13.4"
+    "aiohttp==3.13.4" \
+    "msal==1.28.0"
 
 # Image-manipulation tooling for the `studio` profile's photo workflow.
 # The studio profile runs its terminal toolset with backend=local, so image
 # processing happens inside THIS container. The base image already ships
 # python3 + Pillow; we add the CLI utilities the workflow may reach for:
-#   imagemagick   — convert/identify/mogrify for ad-hoc edits
-#   libvips-tools — fast `vips`/`vipsthumbnail` for large batches
-#   webp          — cwebp/dwebp for WebP sources from vendor DAMs
-#   zip/unzip     — package PIM-ready output to post to Teams
+#   imagemagick   - convert/identify/mogrify for ad-hoc edits
+#   libvips-tools - fast `vips`/`vipsthumbnail` for large batches
+#   webp          - cwebp/dwebp for WebP sources from vendor DAMs
+#   zip/unzip     - package PIM-ready output to post to Teams
+#   rsync/sqlite3 - ACA standard-storage restore/snapshot wrapper
 # Pinned to apt (Debian 13/trixie) so the layer survives image rebuilds.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -44,6 +46,8 @@ RUN apt-get update \
         unzip \
         curl \
         ca-certificates \
+        rsync \
+        sqlite3 \
  && rm -rf /var/lib/apt/lists/*
 
 # rclone gives the studio agent access to its own Azure Blob Storage container.
@@ -53,11 +57,23 @@ RUN apt-get update \
 # Credentials live in the volume at /opt/data/profiles/studio/rclone.conf
 # (see docs/agent-blob-setup.md), so they survive rebuilds; only the binary is baked.
 ARG RCLONE_VERSION=v1.74.3
-RUN curl -fsSL "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip" -o /tmp/rclone.zip \
+RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-amd64.zip" -o /tmp/rclone.zip \
  && unzip -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
  && chmod 0755 /usr/local/bin/rclone \
  && rm /tmp/rclone.zip \
  && /usr/local/bin/rclone version | head -1
+
+COPY scripts/aca/hermes-aca-restore.sh /etc/cont-init.d/00-aca-restore
+COPY scripts/aca/hermes-aca-configure-profiles.sh /etc/cont-init.d/016-aca-configure-profiles
+COPY scripts/aca/hermes-aca-sync.sh /etc/services.d/aca-sync/run
+COPY scripts/aca/hermes-aca-proxy.py /usr/local/bin/hermes-aca-proxy
+COPY scripts/aca/hermes-aca-proxy.sh /etc/services.d/aca-proxy/run
+RUN chmod 0755 \
+        /usr/local/bin/hermes-aca-proxy \
+        /etc/cont-init.d/00-aca-restore \
+        /etc/cont-init.d/016-aca-configure-profiles \
+        /etc/services.d/aca-sync/run \
+        /etc/services.d/aca-proxy/run
 
 # The s6-overlay init runs as root and switches to the hermes user
 # itself, so we do not need an explicit USER instruction here.
