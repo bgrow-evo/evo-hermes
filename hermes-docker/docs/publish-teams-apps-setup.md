@@ -1,19 +1,20 @@
 # Publish Hermes Teams apps to the org-wide app catalog
 
-The two Hermes bots (`Hermes` / default profile, `Hermes Studio` / studio profile) are currently registered as **personal custom apps** via `teams app create`. This allows Bill to use them locally, but they cannot be installed into team channels via the standard "Add app" flow because they're not in the org-wide app catalog.
+The two Hermes bots (`Hermes` / default profile, `Hermes Studio` / studio profile) are currently registered as **personal custom apps** via `teams app create`. This allows application admins and their teams to use them, but they cannot be installed into team channels via the standard "Add app" flow because they're not in the org-wide app catalog.
 
 ## What's blocking install into team channels
 
 When you try to add "Hermes" to a team channel via **Add app** in Teams, the Teams UI only shows apps from the **org-wide app catalog** and org-default apps. The current sideloaded custom apps are personal only, so a request to add them fails with "Ask a team owner to add the app" (the team owner sees the same UI limitation, not a permission gap).
 
-## Publishing to org-wide app catalog requires Teams admin role
+## Publishing to org-wide app catalog requires Global or Teams Service Admin role
 
-The Microsoft Graph endpoint `POST /v1.0/appCatalogs/teamsApps` (used to publish an app from a zip package to the org catalog) requires one of these roles:
-- **Teams Service Administrator**
+The Microsoft Graph endpoint `POST /v1.0/appCatalogs/teamsApps` (used to publish an app from a zip package to the org catalog) requires one of these **tenant-level roles**:
 - **Global Administrator**
-- Or a delegated token with `AppCatalog.Submit` / `AppCatalog.ReadWrite.All` scope (which must be granted by Global Admin)
+- **Teams Service Administrator**
 
-Bill's current role does not have this scope, and adding it requires Global Admin consent.
+These are **tenant-level administrative roles**, not app-specific permissions. Even with Graph permissions like `AppCatalog.ReadWrite.All` granted on a service principal, the Graph API still rejects requests from accounts that do not hold one of the above tenant roles.
+
+**Bill's current role (Application Administrator) is insufficient.** A Global Admin or Teams Service Admin must run the publish script.
 
 ## Temporary workaround: Install apps as team owner or admin
 

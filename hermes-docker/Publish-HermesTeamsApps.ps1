@@ -1,15 +1,26 @@
 <#
 .SYNOPSIS
-  Publish (or update) Hermes Teams apps to the org-wide app catalog.
+  Publish (or update) Hermes Teams apps to the org-wide app catalog (Global or Teams Service Admin only).
 
 .DESCRIPTION
   Idempotent script. For each Hermes bot app (default "Hermes" and "Hermes Studio"),
   downloads the current app package via teams CLI, then publishes it to the tenant's
-  org-wide app catalog via Microsoft Graph (uses the current Azure CLI logged-in user's
-  delegated token). If a catalog entry already exists for the app, publishes a new version;
-  otherwise creates a new catalog entry.
+  org-wide app catalog via Microsoft Graph using an app-only (client credentials) token.
+  If a catalog entry already exists for the app, publishes a new version; otherwise creates
+  a new catalog entry.
 
-  Requires Azure CLI login (az login) with a user who has the necessary Graph permissions.
+  The app-only token uses credentials from "Hermes Teams App Publisher" Entra app
+  (provisioned by provision-teams-app-publisher.ps1), which has AppCatalog.ReadWrite.All
+  Application permission with admin consent already granted.
+
+  **REQUIRED TENANT-LEVEL ROLE:** This script can only succeed when run by a user who holds
+  one of these TENANT-LEVEL administrative roles:
+  - Global Administrator
+  - Teams Service Administrator
+
+  These are tenant-level roles, not app-specific permissions. Even with Graph permissions
+  granted on the service principal, Microsoft will reject the catalog POST endpoint from
+  users who do not hold one of these roles. Application Administrators alone cannot run this.
 
 .EXAMPLE
   .\Publish-HermesTeamsApps.ps1
@@ -25,10 +36,33 @@ function Ok($m)   { Write-Host "    $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "    $m" -ForegroundColor Yellow }
 function Err($m)  { Write-Host "    $m" -ForegroundColor Red }
 
-Step "Getting delegated Graph token via Azure CLI"
-$tokenResp = az account get-access-token --resource "https://graph.microsoft.com" | ConvertFrom-Json
-$token = $tokenResp.accessToken
-Ok "Token acquired (delegated auth)"
+# Load publisher app credentials from ~/.hermes/.env
+$HermesHome = if (Test-Path "$env:USERPROFILE\.hermes") { "$env:USERPROFILE\.hermes" } else { "/opt/data" }
+$HermesEnv = "$HermesHome\.env"
+
+if (-not (Test-Path $HermesEnv)) {
+    Err "Hermes .env not found at $HermesEnv"
+    Err "Run provision-teams-app-publisher.ps1 first"
+    exit 1
+}
+
+$envContent = Get-Content $HermesEnv -Raw
+$ClientId = $envContent -match 'TEAMS_APP_PUBLISHER_CLIENT_ID=(.+)' | ForEach-Object { $Matches[1] }
+$ClientSecret = $envContent -match 'TEAMS_APP_PUBLISHER_CLIENT_SECRET=(.+)' | ForEach-Object { $Matches[1] }
+$TenantId = $envContent -match 'TEAMS_APP_PUBLISHER_TENANT_ID=(.+)' | ForEach-Object { $Matches[1] }
+
+if (-not $ClientId -or -not $ClientSecret -or -not $TenantId) {
+    Err "Missing TEAMS_APP_PUBLISHER_* env vars in $HermesEnv"
+    exit 1
+}
+
+Step "Getting app-only Graph token (publisher app)"
+$tokenUrl = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token"
+$tokenBody = "grant_type=client_credentials&client_id=$ClientId&client_secret=$ClientSecret&scope=https://graph.microsoft.com/.default"
+
+$tokenResp = Invoke-RestMethod -Method Post -Uri $tokenUrl -Body $tokenBody -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+$token = $tokenResp.access_token
+Ok "Token acquired (app-only, AppCatalog.ReadWrite.All permission)"
 
 # Define the apps to publish
 $apps = @(
@@ -81,7 +115,7 @@ foreach ($app in $apps) {
             $possibleId = $app.appId
             $updateUrl = "$catalogUrl/$possibleId/appDefinitions"
             try {
-                $updateResp = Invoke-RestMethod -Method Post -Uri $updateUrl -Headers $headers -Body $zipBytes -ErrorAction Stop
+                Invoke-RestMethod -Method Post -Uri $updateUrl -Headers $headers -Body $zipBytes -ErrorAction Stop | Out-Null
                 $catalogId = $possibleId
                 Ok "Published new version to existing catalog entry: $catalogId"
             } catch {
