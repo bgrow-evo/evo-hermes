@@ -16,6 +16,10 @@ RSYNC_EXCLUDES=(
   --exclude "*.db-shm"
   --exclude "lazy-packages/"
   --exclude "logs/gateways/"
+  # Graph token cache is seeded into the share out-of-band (az storage file
+  # upload) BEFORE the live copy exists — keep --delete from wiping it. It is
+  # still persisted, via the explicit copy in sync_to_persist below.
+  --exclude ".graph_user_token_cache.json"
 )
 
 RSYNC_COMMON=(
@@ -88,6 +92,27 @@ sync_to_persist() {
   backup_sqlite_db "state.db"
   backup_sqlite_db "kanban.db"
   backup_sqlite_db "profiles/$PROFILE_NAME/state.db"
+
+  # Graph token cache: excluded from the rsync above so an out-of-band share
+  # seed can never be --delete'd. Sync it explicitly, newest-wins in BOTH
+  # directions:
+  #  - persist newer (operator re-ran graph_login + uploaded) -> pull to live;
+  #    the adapter's mtime-reload picks it up without a restart.
+  #  - live newer (adapter rotated the refresh token) -> push to persist.
+  _gc_live="$LIVE_DIR/.graph_user_token_cache.json"
+  _gc_persist="$PERSIST_DIR/.graph_user_token_cache.json"
+  # Identical content -> nothing to do (prevents the mtime ping-pong where each
+  # copy direction makes the destination "newer" for the next cycle).
+  if [ -f "$_gc_live" ] && [ -f "$_gc_persist" ] && cmp -s "$_gc_live" "$_gc_persist"; then
+    :
+  elif [ -f "$_gc_persist" ] && { [ ! -f "$_gc_live" ] || [ "$_gc_persist" -nt "$_gc_live" ]; }; then
+    cp "$_gc_persist" "$_gc_live.tmp" && mv "$_gc_live.tmp" "$_gc_live" \
+      && chown 10000:10000 "$_gc_live" 2>/dev/null; chmod 0600 "$_gc_live" 2>/dev/null
+    log "Pulled newer Graph token cache from durable storage"
+  elif [ -f "$_gc_live" ] && { [ ! -f "$_gc_persist" ] || [ "$_gc_live" -nt "$_gc_persist" ]; }; then
+    cp "$_gc_live" "$_gc_persist.tmp" 2>/dev/null && mv "$_gc_persist.tmp" "$_gc_persist" \
+      || log "WARNING: graph token cache persist copy failed"
+  fi
 }
 
 trap 'sync_to_persist; exit 0' TERM INT

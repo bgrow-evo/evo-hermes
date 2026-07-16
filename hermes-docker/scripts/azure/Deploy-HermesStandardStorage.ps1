@@ -32,6 +32,7 @@ param(
     [int]$StudioBotPort        = 3979,
     [ValidateSet("studio", "default")]
     [string]$ProxyDefaultProfile = "studio",
+    [bool]$SharedTeamsApp      = $true,
     [switch]$SkipBuild,
     [switch]$SkipTeamsUpdate,
     [switch]$SkipVerify,
@@ -43,6 +44,31 @@ $ErrorActionPreference = "Stop"
 function Step($m) { Write-Host "`n==> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "    $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "    $m" -ForegroundColor Yellow }
+function Read-DotEnv($path) {
+    $values = @{}
+    if (-not (Test-Path $path)) { return $values }
+    foreach ($line in Get-Content $path) {
+        if ($line -match '^\s*#' -or $line -notmatch '^\s*([^#=\s]+)\s*=\s*(.*)\s*$') { continue }
+        $key = $Matches[1]
+        $value = $Matches[2].Trim()
+        if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        $values[$key] = $value
+    }
+    return $values
+}
+function Add-EnvValue([System.Collections.ArrayList]$target, [hashtable]$source, [string]$name) {
+    if ($source.ContainsKey($name) -and $source[$name]) {
+        [void]$target.Add([ordered]@{ name = $name; value = $source[$name] })
+    }
+}
+function Add-SecretEnv([System.Collections.ArrayList]$envTarget, [System.Collections.ArrayList]$secretTarget, [hashtable]$source, [string]$envName, [string]$secretName) {
+    if ($source.ContainsKey($envName) -and $source[$envName]) {
+        [void]$secretTarget.Add([ordered]@{ name = $secretName; value = $source[$envName] })
+        [void]$envTarget.Add([ordered]@{ name = $envName; secretRef = $secretName })
+    }
+}
 
 if (-not $Setup -and -not $Push) {
     Write-Host "Usage:"
@@ -105,6 +131,84 @@ if ($LASTEXITCODE -ne 0 -or -not $storageKey) { throw "Could not get storage key
 $acrPassword = az acr credential show --name $AcrName --query "passwords[0].value" --output tsv
 if ($LASTEXITCODE -ne 0 -or -not $acrPassword) { throw "Could not get ACR credentials." }
 Ok "Credentials resolved."
+
+$hermesEnvPath = Join-Path $env:USERPROFILE ".hermes\.env"
+$hermesEnv = Read-DotEnv $hermesEnvPath
+if ($hermesEnv.Count -gt 0) {
+    Ok "Loaded Hermes runtime env keys from $hermesEnvPath (values redacted)."
+} else {
+    Warn "No Hermes runtime env found at $hermesEnvPath; Teams credentials must already be in config/env."
+}
+
+$studioEnvPath = Join-Path $env:USERPROFILE ".hermes\profiles\studio\.env"
+$studioEnv = Read-DotEnv $studioEnvPath
+if ($studioEnv.Count -gt 0) {
+    Ok "Loaded Studio profile env keys from $studioEnvPath (values redacted)."
+    $studioMap = @{
+        "TEAMS_CLIENT_ID" = "STUDIO_TEAMS_CLIENT_ID"
+        "TEAMS_CLIENT_SECRET" = "STUDIO_TEAMS_CLIENT_SECRET"
+        "TEAMS_TENANT_ID" = "STUDIO_TEAMS_TENANT_ID"
+        "TEAMS_HOME_CHANNEL" = "STUDIO_TEAMS_HOME_CHANNEL"
+        "TEAMS_HOME_CHANNEL_NAME" = "STUDIO_TEAMS_HOME_CHANNEL_NAME"
+    }
+    foreach ($key in $studioMap.Keys) {
+        if ($studioEnv.ContainsKey($key) -and $studioEnv[$key] -and -not $hermesEnv.ContainsKey($studioMap[$key])) {
+            $hermesEnv[$studioMap[$key]] = $studioEnv[$key]
+        }
+    }
+}
+
+if ($SharedTeamsApp) {
+    foreach ($pair in @(
+        @("TEAMS_CLIENT_ID", "STUDIO_TEAMS_CLIENT_ID"),
+        @("TEAMS_CLIENT_SECRET", "STUDIO_TEAMS_CLIENT_SECRET"),
+        @("TEAMS_TENANT_ID", "STUDIO_TEAMS_TENANT_ID")
+    )) {
+        if ($hermesEnv.ContainsKey($pair[0]) -and $hermesEnv[$pair[0]]) {
+            $hermesEnv[$pair[1]] = $hermesEnv[$pair[0]]
+        }
+    }
+    Ok "Shared Teams app mode enabled: studio gateway will validate the same bot identity as default."
+}
+
+$acaSecrets = [System.Collections.ArrayList]@(
+    [ordered]@{ name = "acr-password"; value = $acrPassword }
+)
+$sharedTeamsAppValue = if ($SharedTeamsApp) { "1" } else { "0" }
+$acaEnv = [System.Collections.ArrayList]@(
+    [ordered]@{ name = "HERMES_DASHBOARD"; value = "0" }
+    [ordered]@{ name = "HERMES_PROFILE"; value = "studio" }
+    [ordered]@{ name = "HERMES_SYNC_INTERVAL_SECONDS"; value = "60" }
+    [ordered]@{ name = "HERMES_PROXY_PORT"; value = "$ProxyPort" }
+    [ordered]@{ name = "HERMES_DEFAULT_TEAMS_PORT"; value = "$DefaultBotPort" }
+    [ordered]@{ name = "HERMES_STUDIO_TEAMS_PORT"; value = "$StudioBotPort" }
+    [ordered]@{ name = "HERMES_PROXY_DEFAULT_PROFILE"; value = $ProxyDefaultProfile }
+    [ordered]@{ name = "HERMES_TEAMS_SHARED_APP"; value = $sharedTeamsAppValue }
+    [ordered]@{ name = "HERMES_TEAMS_PROFILE_ROUTES"; value = "/opt/data/teams-profile-routes.yaml" }
+    [ordered]@{ name = "HERMES_TEAMS_ROUTE_UNKNOWN_POLICY"; value = "deny" }
+)
+foreach ($name in @(
+    "TEAMS_CLIENT_ID",
+    "TEAMS_TENANT_ID",
+    "TEAMS_ALLOWED_USERS",
+    "TEAMS_ALLOW_ALL_USERS",
+    "TEAMS_HOME_CHANNEL",
+    "TEAMS_HOME_CHANNEL_NAME",
+    "STUDIO_TEAMS_CLIENT_ID",
+    "STUDIO_TEAMS_TENANT_ID",
+    "STUDIO_TEAMS_HOME_CHANNEL",
+    "STUDIO_TEAMS_HOME_CHANNEL_NAME",
+    # teams_graph (hermes-ai user chat adapter): shared identity + per-profile
+    # chat IDs consumed by hermes-aca-configure-profiles.sh at cont-init.
+    "TEAMS_GRAPH_CLIENT_ID",
+    "TEAMS_GRAPH_TENANT_ID",
+    "HERMES_ADMIN_CHAT_ID",
+    "STUDIO_CHAT_ID"
+)) {
+    Add-EnvValue $acaEnv $hermesEnv $name
+}
+Add-SecretEnv $acaEnv $acaSecrets $hermesEnv "TEAMS_CLIENT_SECRET" "teams-client-secret"
+Add-SecretEnv $acaEnv $acaSecrets $hermesEnv "STUDIO_TEAMS_CLIENT_SECRET" "studio-teams-client-secret"
 
 if ($Setup) {
     Step "Ensuring ACA environment: $AcaEnvName"
@@ -185,9 +289,7 @@ $patch = [ordered]@{
                     passwordSecretRef = "acr-password"
                 }
             )
-            secrets = @(
-                [ordered]@{ name = "acr-password"; value = $acrPassword }
-            )
+            secrets = @($acaSecrets)
         }
         template = [ordered]@{
             revisionSuffix = $revSuffix
@@ -197,15 +299,7 @@ $patch = [ordered]@{
                     image = $image
                     args = @("/bin/sleep", "infinity")
                     resources = [ordered]@{ cpu = 2.0; memory = "4Gi" }
-                    env = @(
-                        [ordered]@{ name = "HERMES_DASHBOARD"; value = "0" }
-                        [ordered]@{ name = "HERMES_PROFILE"; value = "studio" }
-                        [ordered]@{ name = "HERMES_SYNC_INTERVAL_SECONDS"; value = "60" }
-                        [ordered]@{ name = "HERMES_PROXY_PORT"; value = "$ProxyPort" }
-                        [ordered]@{ name = "HERMES_DEFAULT_TEAMS_PORT"; value = "$DefaultBotPort" }
-                        [ordered]@{ name = "HERMES_STUDIO_TEAMS_PORT"; value = "$StudioBotPort" }
-                        [ordered]@{ name = "HERMES_PROXY_DEFAULT_PROFILE"; value = $ProxyDefaultProfile }
-                    )
+                    env = @($acaEnv)
                     volumeMounts = @(
                         [ordered]@{ volumeName = "hermes-live"; mountPath = "/opt/data" }
                         [ordered]@{ volumeName = "hermes-persist"; mountPath = "/mnt/hermes-persist" }
@@ -238,28 +332,33 @@ if (-not $fqdn) { throw "Could not retrieve FQDN." }
 Ok "FQDN: $fqdn"
 
 if (-not $SkipTeamsUpdate) {
-    $defaultEndpoint = "https://$fqdn/default/api/messages"
+    $sharedEndpoint = "https://$fqdn/api/messages"
+    $defaultEndpoint = if ($SharedTeamsApp) { $sharedEndpoint } else { "https://$fqdn/default/api/messages" }
     $studioEndpoint = "https://$fqdn/studio/api/messages"
 
     if (-not (Get-Command teams -ErrorAction SilentlyContinue)) {
         Warn "Teams CLI not found. Manual commands:"
         Warn "  teams app update $DefaultBotAppId --endpoint $defaultEndpoint"
-        Warn "  teams app update $StudioBotAppId --endpoint $studioEndpoint"
+        if (-not $SharedTeamsApp) { Warn "  teams app update $StudioBotAppId --endpoint $studioEndpoint" }
     } else {
-        Step "Updating Hermes (default) Teams bot endpoint"
+        Step "Updating Hermes Teams bot endpoint"
         teams app update $DefaultBotAppId --endpoint $defaultEndpoint
         if ($LASTEXITCODE -ne 0) {
-            Warn "Default bot update failed. Manual: teams app update $DefaultBotAppId --endpoint $defaultEndpoint"
+            Warn "Hermes bot update failed. Manual: teams app update $DefaultBotAppId --endpoint $defaultEndpoint"
         } else {
-            Ok "Default bot endpoint updated."
+            Ok "Hermes bot endpoint updated."
         }
 
-        Step "Updating Hermes Studio Teams bot endpoint"
-        teams app update $StudioBotAppId --endpoint $studioEndpoint
-        if ($LASTEXITCODE -ne 0) {
-            Warn "Studio bot update failed. Manual: teams app update $StudioBotAppId --endpoint $studioEndpoint"
+        if ($SharedTeamsApp) {
+            Warn "Shared Teams app mode: leave old Hermes Studio app disabled/unused; install Hermes app in each routed channel."
         } else {
-            Ok "Studio bot endpoint updated."
+            Step "Updating Hermes Studio Teams bot endpoint"
+            teams app update $StudioBotAppId --endpoint $studioEndpoint
+            if ($LASTEXITCODE -ne 0) {
+                Warn "Studio bot update failed. Manual: teams app update $StudioBotAppId --endpoint $studioEndpoint"
+            } else {
+                Ok "Studio bot endpoint updated."
+            }
         }
     }
 }
@@ -268,9 +367,9 @@ Write-Host ""
 Write-Host "=========================================================" -ForegroundColor Green
 Write-Host "  Hermes standard-storage deployment requested" -ForegroundColor Green
 Write-Host "=========================================================" -ForegroundColor Green
-Write-Host "  Studio Teams URL  : https://$fqdn/studio/api/messages" -ForegroundColor Green
-Write-Host "  Default Teams URL : https://$fqdn/default/api/messages" -ForegroundColor Green
-Write-Host "  Bare URL routes to studio: https://$fqdn/api/messages" -ForegroundColor Green
+Write-Host "  Shared Teams URL  : https://$fqdn/api/messages" -ForegroundColor Green
+Write-Host "  Studio Teams URL  : https://$fqdn/studio/api/messages (legacy/debug)" -ForegroundColor Green
+Write-Host "  Default Teams URL : https://$fqdn/default/api/messages (legacy/debug)" -ForegroundColor Green
 Write-Host "  ACA ingress       : 443 -> container $ProxyPort -> profile ports $DefaultBotPort/$StudioBotPort" -ForegroundColor Gray
 Write-Host "  Image         : $image" -ForegroundColor Gray
 Write-Host "  Live data     : /opt/data <- EmptyDir" -ForegroundColor Gray

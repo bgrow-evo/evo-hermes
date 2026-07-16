@@ -86,11 +86,29 @@ New-CsGroupPolicyAssignment -GroupId $groupId -PolicyType TeamsAppPermission -Po
 
 (Exact cmdlet names and syntax may vary by MicrosoftTeams module version; check with `Get-Command -Module MicrosoftTeams *AppPermission*` after installing.)
 
+## Inline conversation vs. threaded replies
+
+If bot replies show up as **threaded posts** instead of a flat back-and-forth, that is the surface
+you're using — not a bug and not a config toggle:
+
+- **Teams channels are structurally threaded.** Every channel message is a root post with replies
+  underneath. A bot @mentioned in a channel replies *inside that message's thread*. There is no
+  Hermes (or Teams) setting that makes a channel reply flat/inline — the channel UI is thread-based.
+- **For a normal inline conversation, use a 1:1 chat (DM) or a group chat with the bot.** These
+  surfaces are inline by design. Both are already declared in `manifest.json`
+  (`scopes: ["personal", "team", "groupChat"]`), so no manifest or code change is needed — just
+  message the bot in a DM or add it to a group chat instead of a channel.
+
+**Takeaway for installs:** to talk to Hermes conversationally, open a DM or group chat with it. Only
+add it to a channel when you specifically want the channel's threaded, shared-history behavior.
+
 ## Notes
 
 - **App IDs** (AAD app IDs):
   - Hermes (default): `3146b701-6559-4671-b9d9-91e7508884b1`
   - Hermes Studio: `521aaadb-ab96-4275-be9e-37bdb285ffc8`
+- **Teams app/package IDs**:
+  - Hermes Studio: `6c036d1a-5e0a-4627-84ed-32a4a16c0a6d`
 - **Current sideload install links** (Bill):
   - Default: https://teams.microsoft.com/l/app/3146b701-6559-4671-b9d9-91e7508884b1?installAppPackage=true&appTenantId=1c2caf71-5666-4b98-bffc-ae0da8c4a4db
-  - Studio: https://teams.microsoft.com/l/app/521aaadb-ab96-4275-be9e-37bdb285ffc8?installAppPackage=true&appTenantId=1c2caf71-5666-4b98-bffc-ae0da8c4a4db
+  - Studio: https://teams.microsoft.com/l/app/6c036d1a-5e0a-4627-84ed-32a4a16c0a6d?installAppPackage=true&appTenantId=1c2caf71-5666-4b98-bffc-ae0da8c4a4db

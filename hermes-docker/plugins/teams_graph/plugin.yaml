@@ -1,0 +1,49 @@
+name: teams-graph-platform
+label: Teams (hermes-ai user)
+kind: platform
+version: 1.0.0
+description: >
+  Microsoft Teams chat adapter that runs as a licensed user (hermes-ai@evo.com)
+  via delegated Microsoft Graph — no Teams app, no Bot Framework, no threads.
+  Polls the user's 1:1 and group chats (Nextcloud Talk style) and replies
+  inline as that user. One-time device-code sign-in mints a refresh token
+  cached on the data volume; MSAL refreshes silently thereafter.
+author: evo
+requires_env:
+  - name: TEAMS_GRAPH_CLIENT_ID
+    description: "Entra public-client app ID (provision-hermes-ai-graph.ps1)"
+    prompt: "Graph client ID"
+    password: false
+  - name: TEAMS_GRAPH_TENANT_ID
+    description: "Entra tenant ID"
+    prompt: "Tenant ID"
+    password: false
+optional_env:
+  - name: TEAMS_GRAPH_CHATS
+    description: "Comma-separated Teams chat IDs this profile answers (group chats)"
+    prompt: "Chat IDs (comma-separated)"
+    password: false
+  - name: TEAMS_GRAPH_DM_MODE
+    description: "'all' = auto-discover and answer 1:1 chats (one profile only), 'none' = configured chats only (default)"
+    prompt: "DM mode (all/none)"
+    password: false
+  - name: TEAMS_GRAPH_POLL_SECONDS
+    description: "Chat poll interval in seconds (default 3)"
+    prompt: "Poll seconds"
+    password: false
+  - name: TEAMS_GRAPH_TOKEN_CACHE
+    description: "Path to the shared MSAL token cache (default /opt/data/.graph_user_token_cache.json)"
+    prompt: "Token cache path"
+    password: false
+  - name: TEAMS_GRAPH_ALLOWED_USERS
+    description: "Comma-separated AAD object IDs or UPNs allowed to talk to the agent"
+    prompt: "Allowed users"
+    password: false
+  - name: TEAMS_GRAPH_ALLOW_ALL_USERS
+    description: "Allow any chat member to talk to the agent (true/false)"
+    prompt: "Allow all users?"
+    password: false
+  - name: TEAMS_GRAPH_HOME_CHAT
+    description: "Chat ID for cron / notification delivery"
+    prompt: "Home chat ID"
+    password: false

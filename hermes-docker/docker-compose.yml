@@ -4,25 +4,26 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BASE_IMAGE: ${BASE_IMAGE:-nousresearch/hermes-agent:latest}
+        BASE_IMAGE: ${BASE_IMAGE:-nousresearch/hermes-agent:v2026.7.7.2}
     image: hermes-evo:latest
     container_name: hermes
     restart: unless-stopped
     command: gateway run
     ports:
       - "8642:8642"   # gateway OpenAI-compatible API + health endpoint
-      - "9119:9119"   # dashboard (only reached when HERMES_DASHBOARD=1)
-      # Default-profile Teams bot is disabled for now (platforms.teams.enabled=false);
-      # re-publish this and re-enable Teams on the default profile to bring it back.
-      # - "3978:3978" # Microsoft Teams bot messaging endpoint (default profile)
+      # Web dashboard is disabled (HERMES_DASHBOARD=0); leave unmapped.
+      # - "9119:9119" # dashboard (only reached when HERMES_DASHBOARD=1)
+      - "3978:3978"   # Microsoft Teams bot messaging endpoint (default profile)
       - "3979:3979"   # Microsoft Teams bot messaging endpoint (studio profile)
     volumes:
       # HERMES_DATA is set by install.ps1 (defaults to ~/.hermes on Linux/macOS).
       # On Windows it is written to the .env file beside this compose file.
       - "${HERMES_DATA:-~/.hermes}:/opt/data"
     environment:
-      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD=0
       # --- Dashboard web UI (chat) auth: HTTP basic auth ---
+      # Dashboard disabled above (HERMES_DASHBOARD=0). These are kept so it can be
+      # flipped back on (set HERMES_DASHBOARD=1 + re-map port 9119) without re-editing.
       # Values are supplied via the local .env file written by install.ps1.
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME}
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD}

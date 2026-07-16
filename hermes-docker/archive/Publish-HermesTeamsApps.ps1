@@ -72,7 +72,7 @@ $apps = @(
     },
     @{
         name  = "Hermes Studio"
-        appId = "521aaadb-ab96-4275-be9e-37bdb285ffc8"
+        appId = "6c036d1a-5e0a-4627-84ed-32a4a16c0a6d"
     }
 )
 

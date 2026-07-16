@@ -101,39 +101,21 @@ docker exec hermes hermes -p studio cron pause <job_id>
 ls ~/.hermes/outbox/studio/
 ```
 
-## Teams bot (optional, dedicated to studio)
+## Teams chat (teams_graph — hermes-ai user)
 
-The studio gateway can run its **own** Teams bot, separate from the default
-profile's. Because the default bot owns port `3978`, the studio bot uses **`3979`**
-(published in `docker-compose.yml`) and needs its own Azure registration + tunnel.
+The studio gateway talks on Teams through the shared **`teams_graph`** adapter: it
+polls the "Studio Photo" group chat as the licensed user `hermes-ai@evo.com` via
+delegated Microsoft Graph and replies inline as that user. No bot registration, no
+tunnel, no webhook — see the main [README](../../README.md) and
+[docs/hermes-ai-chat-setup.md](../../docs/hermes-ai-chat-setup.md).
 
-Set it up with [`teams-bot-setup-studio.ps1`](../../teams-bot-setup-studio.ps1):
+Wiring lives in `~/.hermes/.env` (`STUDIO_CHAT_ID` = the group chat's Graph chat id)
+and is applied to the profile's `config.yaml` at boot by
+`scripts/aca/hermes-aca-configure-profiles.sh`. The daily cron delivers its results
+to that chat (`deliver=teams_graph`, home chat = `STUDIO_CHAT_ID`).
 
-```powershell
-# 1) create the new bot (prints CLIENT_ID / CLIENT_SECRET / TENANT_ID)
-.\teams-bot-setup-studio.ps1
-
-# 2) connect the studio profile to it (writes creds + enables Teams on :3979, restarts gw)
-.\teams-bot-setup-studio.ps1 -WireStudio `
-    -TeamsClientId <id> -TeamsClientSecret <secret> -TeamsTenantId <tenant>
-```
-
-Notes:
-- Run `docker compose up -d` once after pulling the `3979` port change so the
-  webhook is reachable.
-- **Two bots = two tunnels.** ngrok's free tier allows only one agent; use a single
-  agent with two tunnels — `.\teams-bot-setup-studio.ps1 -PrintNgrokConfig` prints a
-  ready `ngrok.yml` for `ngrok start --all`.
-- Creds live in the volume copy `~/.hermes/profiles/studio/.env` and the volume
-  `config.yaml` (`platforms.teams.extra`), never in the repo scaffold.
-
-Once wired, point the daily cron at the studio bot by setting `--deliver` to a
-reachable Teams target (e.g. a DM/channel id the studio bot has a conversation
-reference for). Until then the cron delivers to `local` and the ZIP lands in the
-outbox (`~/.hermes/outbox/studio/<date>/`) for manual/Power-Automate pickup.
-
-**Getting the ZIP into Teams.** The bot posts the MANIFEST text + a contact-sheet
-image into the chat, but it **cannot attach the `.zip`** (Teams adapter sends
+**Getting the ZIP into Teams.** The agent posts the MANIFEST text + a contact-sheet
+image into the chat, but it **cannot attach the `.zip`** (chat messages send
 attachments text-only). So on live runs the agent pushes the package to its own
 **Azure Blob** container (`agent-blob:studio-outbox/<date>/`, via the `agent-blob`
 skill — see [../../docs/agent-blob-setup.md](../../docs/agent-blob-setup.md)), and a

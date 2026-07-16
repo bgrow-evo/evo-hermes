@@ -1,0 +1,71 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.25/MicrosoftTeams.schema.json",
+  "version": "1.0.3",
+  "manifestVersion": "1.25",
+  "id": "3146b701-6559-4671-b9d9-91e7508884b1",
+  "name": {
+    "short": "Hermes",
+    "full": "Hermes"
+  },
+  "developer": {
+    "name": "Developer",
+    "websiteUrl": "https://www.example.com",
+    "privacyUrl": "https://www.example.com/privacy",
+    "termsOfUseUrl": "https://www.example.com/terms"
+  },
+  "description": {
+    "short": "Hermes",
+    "full": "Hermes"
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#FFFFFF",
+  "staticTabs": [
+    {
+      "entityId": "conversations",
+      "scopes": [
+        "personal"
+      ]
+    },
+    {
+      "entityId": "about",
+      "scopes": [
+        "personal"
+      ]
+    }
+  ],
+  "bots": [
+    {
+      "botId": "3146b701-6559-4671-b9d9-91e7508884b1",
+      "scopes": [
+        "personal",
+        "team",
+        "groupChat"
+      ],
+      "isNotificationOnly": false,
+      "supportsCalling": false,
+      "supportsVideo": false,
+      "supportsFiles": false
+    }
+  ],
+  "validDomains": [
+    "*.botframework.com",
+    "reforest-scion-cartel.ngrok-free.dev",
+    "placeholder.invalid",
+    "aca-hermes.yellowtree-aa30c779.westus2.azurecontainerapps.io",
+    "aca-hermes-nfs.whiteplant-ace3060d.westus2.azurecontainerapps.io"
+  ],
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        {
+          "name": "ChannelMessage.Read.Group",
+          "type": "Application"
+        }
+      ]
+    }
+  },
+  "supportsChannelFeatures": "tier1"
+}

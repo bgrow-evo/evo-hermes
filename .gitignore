@@ -12,6 +12,14 @@
 # --- Hermes runtime data dir (if anyone points HERMES_DATA into the repo) ---
 .hermes/
 **/outbox/
+**/.graph_user_token_cache.json
+**/rclone.conf
+**/auth.json
+
+# --- Generated packages / local handoffs ---
+*.zip
+**/HANDOFF-*.md
+inline-teams-chat.md
 
 # --- Local Claude Code state ---
 .claude/settings.local.json

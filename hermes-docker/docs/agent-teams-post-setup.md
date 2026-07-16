@@ -22,21 +22,20 @@ post_channel_message.py  ──silent refresh──>  Microsoft Graph v1.0
 
 ## Step 1 — Provision Entra app (run on host)
 
-This creates a public-client Entra app with delegated Graph `ChannelMessage.Send` scope,
-and wires the client ID into the studio profile's `.env`.
+The shared Graph Entra app for the whole hermes-ai integration (chat adapter +
+this channel-post skill) is provisioned by **`provision-hermes-ai-graph.ps1`** —
+it grants `ChannelMessage.Send` plus the chat scopes and writes
+`TEAMS_GRAPH_CLIENT_ID` / `TEAMS_GRAPH_TENANT_ID` into `~/.hermes/.env` and the
+studio profile `.env`.
 
 ```powershell
 cd C:\Users\bgrow\Projects\evo_photo\hermes-docker
-.\provision-studio-teams-post.ps1 -SkipPrompt
+.\provision-hermes-ai-graph.ps1 -SkipPrompt
 ```
 
-The script is **idempotent** — run it multiple times safely.
-
-What it does:
-- Finds or creates the Entra app "Hermes Studio Teams Post" (public client type).
-- Grants delegated Microsoft Graph permission `ChannelMessage.Send` (allows posting to channels).
-- Writes `TEAMS_GRAPH_CLIENT_ID`, `TEAMS_GRAPH_TENANT_ID`, `TEAMS_GRAPH_TEAM_ID`,
-  `TEAMS_GRAPH_CHANNEL_ID` into `~/.hermes/profiles/studio/.env`.
+The script is **idempotent** — run it multiple times safely. For channel posting,
+additionally set `TEAMS_GRAPH_TEAM_ID` / `TEAMS_GRAPH_CHANNEL_ID` in the studio
+profile `.env` (the target team/channel for the daily-summary post).
 
 ## Step 2 — Add hermes-ai@evo.com as a channel member (Teams UI)
 

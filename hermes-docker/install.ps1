@@ -10,16 +10,16 @@
       1. Verifies Docker is installed and the daemon is running.
       2. Creates the persistent data directory (default: %USERPROFILE%\.hermes).
       3. Builds the custom hermes-evo image from the local Dockerfile (which extends
-         nousresearch/hermes-agent:latest and pre-installs the Microsoft Teams SDK).
+         nousresearch/hermes-agent:v2026.7.7.2 and pre-installs the Microsoft Teams SDK).
       4. (First run) Launches the interactive setup wizard to capture API keys.
-      5. Starts the gateway + dashboard in the background via docker compose.
+      5. Starts the gateway in the background via docker compose.
 
 .PARAMETER DataDir
     Host directory mounted into the container at /opt/data.
     Defaults to "$env:USERPROFILE\.hermes".
 
 .PARAMETER BaseImage
-    Upstream base image to build FROM. Defaults to "nousresearch/hermes-agent:latest".
+    Upstream base image to build FROM. Defaults to "nousresearch/hermes-agent:v2026.7.7.2".
     Override to pin a specific release, e.g. "nousresearch/hermes-agent:v1.2.3".
 
 .PARAMETER SkipSetup
@@ -29,11 +29,11 @@
     Run setup only; do not start the gateway afterwards.
 
 .PARAMETER DashboardUser
-    Username for the dashboard web UI (chat) HTTP basic auth. Defaults to "admin".
+    Username for the disabled dashboard web UI if you intentionally re-enable it.
 
 .PARAMETER DashboardPassword
-    Password for the dashboard basic auth as a SecureString. If omitted, you are
-    prompted securely. Reused from the existing local .env on subsequent runs.
+    Password for the disabled dashboard basic auth as a SecureString. Reused from
+    the existing local .env on subsequent runs; no prompt while the dashboard stays off.
 
 .EXAMPLE
     .\install.ps1
@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
     [string]$DataDir = (Join-Path $env:USERPROFILE ".hermes"),
-    [string]$BaseImage = "nousresearch/hermes-agent:latest",
+    [string]$BaseImage = "nousresearch/hermes-agent:v2026.7.7.2",
     [switch]$SkipSetup,
     [switch]$NoStart,
     [string]$DashboardUser = "admin",
@@ -286,8 +286,8 @@ if ($NoStart) {
     return
 }
 
-# --- 5. Resolve dashboard web UI (chat) basic-auth credentials ---------------
-Write-Step "Configuring dashboard web UI (chat) basic auth"
+# --- 5. Resolve optional dashboard web UI (chat) basic-auth credentials -------
+Write-Step "Configuring dashboard web UI state"
 $composeEnv = Join-Path $ScriptDir ".env"
 
 # Reuse existing values from a prior run unless new ones are supplied.
@@ -298,7 +298,8 @@ if (Test-Path $composeEnv) {
     }
 }
 
-# Password: parameter > existing .env > secure prompt.
+# Dashboard is disabled by default, so avoid prompting for credentials. Keep
+# existing/supplied values only so users can flip HERMES_DASHBOARD back on later.
 $plainPassword = $null
 if ($DashboardPassword) {
     $plainPassword = [System.Net.NetworkCredential]::new('', $DashboardPassword).Password
@@ -306,9 +307,8 @@ if ($DashboardPassword) {
     $plainPassword = $existing['HERMES_DASHBOARD_BASIC_AUTH_PASSWORD']
     Write-Ok "Reusing existing dashboard password from $composeEnv"
 } else {
-    $sec = Read-Host -AsSecureString "Set a password for dashboard user '$DashboardUser'"
-    $plainPassword = [System.Net.NetworkCredential]::new('', $sec).Password
-    if (-not $plainPassword) { throw "A dashboard password is required for basic auth." }
+    $plainPassword = ""
+    Write-Ok "Dashboard disabled (HERMES_DASHBOARD=0); no password prompt."
 }
 
 # Username: parameter default 'admin' unless a value already exists.
@@ -348,8 +348,8 @@ if ($composeCmd) {
     docker rm -f hermes *> $null
     docker run -d --name hermes --restart unless-stopped `
         -v "${DataDirAbs}:/opt/data" `
-        -p 8642:8642 -p 9119:9119 -p 3978:3978 `
-        -e HERMES_DASHBOARD=1 `
+        -p 8642:8642 -p 3978:3978 -p 3979:3979 `
+        -e HERMES_DASHBOARD=0 `
         -e "HERMES_DASHBOARD_BASIC_AUTH_USERNAME=$DashboardUser" `
         -e "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=$plainPassword" `
         -e "HERMES_DASHBOARD_BASIC_AUTH_SECRET=$authSecret" `
@@ -368,8 +368,9 @@ if ($SkipStudio) {
 }
 
 Write-Host "`nGateway API:   http://localhost:8642" -ForegroundColor White
-Write-Host "Dashboard:     http://localhost:9119  (login as '$DashboardUser')" -ForegroundColor White
-Write-Host "Teams webhook: http://localhost:3978/health" -ForegroundColor White
+Write-Host "Dashboard:     disabled (HERMES_DASHBOARD=0)" -ForegroundColor White
+Write-Host "Teams webhook: http://localhost:3978/health  (DM/group chat for inline messages)" -ForegroundColor White
+Write-Host "Studio Teams:  http://localhost:3979/health  (DM/group chat for inline messages)" -ForegroundColor White
 if (-not $SkipStudio) {
     Write-Host "Studio profile: docker exec hermes hermes gateway list   (cron: ...hermes -p studio cron list)" -ForegroundColor White
     Write-Host "Studio outbox:  $env:USERPROFILE\.hermes\outbox\studio" -ForegroundColor White

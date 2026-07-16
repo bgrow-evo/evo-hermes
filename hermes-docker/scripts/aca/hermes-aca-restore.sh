@@ -30,6 +30,16 @@ log() {
   printf '[hermes-aca-restore] %s\n' "$*"
 }
 
+fix_auth_permissions() {
+  local path
+  for path in "$LIVE_DIR/auth.json" "$PERSIST_DIR/auth.json"; do
+    if [ -f "$path" ]; then
+      chown 10000:10000 "$path" 2>/dev/null || true
+      chmod 0600 "$path" 2>/dev/null || true
+    fi
+  done
+}
+
 mkdir -p "$LIVE_DIR" "$PERSIST_DIR"
 
 if [ -d "$PERSIST_DIR" ]; then
@@ -41,8 +51,8 @@ if [ -d "$PERSIST_DIR" ]; then
     "$PERSIST_DIR"/ "$LIVE_DIR"/ 2>/dev/null || true
 
   # Main transfer with bounded retry.
-  local attempt=0
-  local max_attempts=3
+  attempt=0
+  max_attempts=3
   while [ $attempt -lt $max_attempts ]; do
     if rsync "${RSYNC_COMMON[@]}" "${RSYNC_EXCLUDES[@]}" "$PERSIST_DIR"/ "$LIVE_DIR"/; then
       break
@@ -60,3 +70,4 @@ if [ -d "$PERSIST_DIR" ]; then
 fi
 
 chown -R 10000:10000 "$LIVE_DIR" 2>/dev/null || true
+fix_auth_permissions

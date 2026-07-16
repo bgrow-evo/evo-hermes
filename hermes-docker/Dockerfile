@@ -12,8 +12,10 @@
 #
 # To pin a specific upstream release instead of :latest, set BASE_IMAGE:
 #   docker compose build --pull --build-arg BASE_IMAGE=nousresearch/hermes-agent:v1.2.3
+#
+# Pinned to v2026.7.7.2 (Hermes 0.18.2). Docker Hub uses the calver tag, not "0.18.2".
 
-ARG BASE_IMAGE=nousresearch/hermes-agent:latest
+ARG BASE_IMAGE=nousresearch/hermes-agent:v2026.7.7.2
 FROM ${BASE_IMAGE}
 
 # Switch to root so we can write into the venv owned by root.
@@ -22,10 +24,13 @@ USER root
 # Pre-install the Teams SDK into the Hermes virtual environment.
 # --no-cache keeps the layer small; uv resolves deps without network at
 # import time because the wheels are already on disk.
-RUN uv pip install --python /opt/hermes/.venv --no-cache \
+# msal is intentionally NOT pinned: microsoft-teams-apps==2.0.13.4 requires msal>=1.33.0,
+# so we let it resolve transitively (upstream lazy_deps["platform.teams"] pins only the two
+# below). UV_NO_PROGRESS/NO_COLOR keep uv's output plain ASCII so `az acr build` log
+# streaming doesn't crash on Windows consoles (cp1252) if uv emits Unicode.
+RUN UV_NO_PROGRESS=1 NO_COLOR=1 uv pip install --python /opt/hermes/.venv --no-cache \
     "microsoft-teams-apps==2.0.13.4" \
-    "aiohttp==3.13.4" \
-    "msal==1.28.0"
+    "aiohttp==3.14.1"
 
 # Image-manipulation tooling for the `studio` profile's photo workflow.
 # The studio profile runs its terminal toolset with backend=local, so image
@@ -61,7 +66,20 @@ RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "https://downloads.r
  && unzip -j /tmp/rclone.zip "*/rclone" -d /usr/local/bin \
  && chmod 0755 /usr/local/bin/rclone \
  && rm /tmp/rclone.zip \
- && /usr/local/bin/rclone version | head -1
+ && env -u RCLONE_VERSION /usr/local/bin/rclone version | head -1
+
+# NOTE: profile assets (skills, playbook) are NOT baked into the image.
+# The Azure Files share (sthermessbxwu2/hermes-data) is the single source of
+# truth for /opt/data — restored on boot, snapshotted every 60s. The repo's
+# profiles/ tree is reference material; install changes to the live volume
+# deliberately (see docs/hermes-ai-chat-setup.md ops notes).
+
+# teams_graph: custom platform adapter — Hermes chats as the hermes-ai user
+# via delegated Microsoft Graph (no Teams app, no Bot Framework, no threads).
+# Baked into the bundled platforms dir so it auto-loads like shipped platforms
+# (user plugins under /opt/data/plugins need a plugins.enabled opt-in; bundled
+# ones do not). Enablement is still config-gated per profile.
+COPY plugins/teams_graph /opt/hermes/plugins/platforms/teams_graph
 
 COPY scripts/aca/hermes-aca-restore.sh /etc/cont-init.d/00-aca-restore
 COPY scripts/aca/hermes-aca-configure-profiles.sh /etc/cont-init.d/016-aca-configure-profiles

@@ -35,8 +35,9 @@ Write-Host "  ACR:    $AcrName"
 Write-Host "  Image:  $ImageRepository`:$ImageTag"
 Write-Host "  Source: $SourcePath"
 Write-Host ""
-Write-Host "  Note: base image nousresearch/hermes-agent:latest will be" -ForegroundColor Gray
-Write-Host "  pulled from Docker Hub during the cloud build." -ForegroundColor Gray
+Write-Host "  Note: the base image pinned in Dockerfile (BASE_IMAGE," -ForegroundColor Gray
+Write-Host "  currently nousresearch/hermes-agent:v2026.7.7.2) is pulled" -ForegroundColor Gray
+Write-Host "  from Docker Hub during the cloud build." -ForegroundColor Gray
 Write-Host ""
 
 $imageTags = if ($ImageTag -ne "latest") { "$ImageRepository`:$ImageTag", "$ImageRepository`:latest" } else { @("$ImageRepository`:latest") }

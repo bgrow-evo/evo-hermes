@@ -137,4 +137,5 @@ Add a parallel branch (or a second flow) triggered on `MANIFEST.md` / `*_contact
   SharePoint library and rights to post in the channel.
 - **Go-live checklist:** (1) `docker exec hermes rm -f /opt/data/profiles/studio/DRY_RUN`
   to allow live writes, (2) switch this flow from #studio-test to the real channel,
-  (3) confirm the studio Teams bot is wired (`teams-bot-setup-studio.ps1`).
+  (3) confirm studio Teams chat delivery works (teams_graph adapter — see
+  `docs/hermes-ai-chat-setup.md`).
