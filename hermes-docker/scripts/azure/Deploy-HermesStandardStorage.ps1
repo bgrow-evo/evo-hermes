@@ -203,7 +203,8 @@ foreach ($name in @(
     "TEAMS_GRAPH_CLIENT_ID",
     "TEAMS_GRAPH_TENANT_ID",
     "HERMES_ADMIN_CHAT_ID",
-    "STUDIO_CHAT_ID"
+    "STUDIO_CHAT_ID",
+    "DISCO_CHAT_ID"
 )) {
     Add-EnvValue $acaEnv $hermesEnv $name
 }
@@ -299,6 +300,26 @@ $patch = [ordered]@{
                     image = $image
                     args = @("/bin/sleep", "infinity")
                     resources = [ordered]@{ cpu = 2.0; memory = "4Gi" }
+                    # Boot restore copies the full data share (incl. the disco
+                    # profile's ~7k-file Projects tree) over SMB before s6 starts
+                    # the proxy; ACA's default startup window is too short and
+                    # kills the container mid-restore. Allow up to 10 minutes.
+                    probes = @(
+                        [ordered]@{
+                            type = "Startup"
+                            tcpSocket = [ordered]@{ port = $ProxyPort }
+                            periodSeconds = 5
+                            failureThreshold = 120
+                            timeoutSeconds = 3
+                        },
+                        [ordered]@{
+                            type = "Liveness"
+                            tcpSocket = [ordered]@{ port = $ProxyPort }
+                            periodSeconds = 10
+                            failureThreshold = 6
+                            timeoutSeconds = 3
+                        }
+                    )
                     env = @($acaEnv)
                     volumeMounts = @(
                         [ordered]@{ volumeName = "hermes-live"; mountPath = "/opt/data" }

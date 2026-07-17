@@ -96,6 +96,8 @@ All editing folders live on the editor's **local machine** — NOT on OneDrive o
 ### Source priority
 **Always check the Merch Sheet first — even for known brands.** DAM links change frequently. Arc'teryx alone has changed DAMs multiple times. Never go directly to a DAM URL from memory or from the vendor DAM guide without first confirming the current link in the Merch Sheet. The vendor DAM guide records what was found previously — the Merch Sheet is the live source of truth.
 
+**Headless/unattended runs (Hermes scheduler):** the Merch Sheet is a SharePoint list; a browser hits Microsoft sign-in under the scheduler. Read it via Graph as hermes-ai instead: `skills/studio-daily-pipeline/scripts/read_merch_sheet.py` (`--columns` to inspect, `--filter <brand>` for a brand's rows). A 403 means hermes-ai lost read access to the list — record as a blocker, don't retry. The browser is still used for the DAM sites themselves, with the URL + credentials taken from the sheet output.
+
 **On Hand stragglers:**
 1. Vendor DAM — check Merch Sheet DAM Links column for URL (always a clickable hyperlink — click it, don't try to parse the URL from text) and Login column for credentials
 2. Brand DTC site — only if it's the brand's own site, not a third-party retailer; Shopify only — see JSON method below

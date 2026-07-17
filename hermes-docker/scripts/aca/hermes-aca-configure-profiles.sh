@@ -217,6 +217,43 @@ if [ -n "${TEAMS_GRAPH_CLIENT_ID:-}" ] && [ -n "${TEAMS_GRAPH_TENANT_ID:-}" ]; t
     set_config "$STUDIO_PROFILE" "platforms.teams_graph.enabled" "false"
     log "teams_graph disabled on $STUDIO_PROFILE (STUDIO_CHAT_ID unset)"
   fi
+
+  # disco profile (migrated from OpenClaw): only configured when its profile
+  # home exists on the volume AND its chat is wired. Data-engineer agent,
+  # gpt-5.6-sol on the shared codex OAuth, "Disco Engineer" group chat only.
+  if [ -d "$LIVE_DIR/profiles/disco" ]; then
+    # Legacy Bot Framework adapter would auto-enable from TEAMS_* env and
+    # collide with the default gateway's port 3978 — keep it off explicitly.
+    set_config disco "platforms.teams.enabled" "false"
+    set_config disco "platforms.teams_graph.extra.client_id" "$TEAMS_GRAPH_CLIENT_ID"
+    set_config disco "platforms.teams_graph.extra.tenant_id" "$TEAMS_GRAPH_TENANT_ID"
+    set_config disco "platforms.teams_graph.extra.token_cache" "${TEAMS_GRAPH_TOKEN_CACHE:-$LIVE_DIR/.graph_user_token_cache.json}"
+    set_config disco "platforms.teams_graph.extra.poll_seconds" "${TEAMS_GRAPH_POLL_SECONDS:-3}"
+    [ -n "$_graph_allowed" ] && set_config disco "platforms.teams_graph.extra.allowed_users" "$_graph_allowed"
+    if [ -n "${DISCO_CHAT_ID:-}" ]; then
+      set_config disco "platforms.teams_graph.enabled" "true"
+      set_config disco "platforms.teams_graph.extra.chats" "$DISCO_CHAT_ID"
+      set_config disco "platforms.teams_graph.extra.dm_mode" "none"
+      set_config disco "platforms.teams_graph.extra.home_channel.chat_id" "$DISCO_CHAT_ID"
+    else
+      set_config disco "platforms.teams_graph.enabled" "false"
+      log "teams_graph disabled on disco (DISCO_CHAT_ID unset)"
+    fi
+    set_config disco "model.default" "${DISCO_MODEL_DEFAULT:-gpt-5.6-sol}"
+    set_config disco "model.provider" "$MODEL_PROVIDER"
+    set_config disco "model.base_url" "$MODEL_BASE_URL"
+    set_config disco "compression.codex_gpt55_autoraise" "false"
+    # Remote evo-mcp (OAuth as hermes-ai; token seeds live in the profile's
+    # mcp-tokens/ dir on the volume). Set every boot so a stale-config restore
+    # can never silently drop the MCP wiring.
+    set_config disco "mcp_servers.evo-mcp.url" "${DISCO_MCP_URL:-https://aca-evo-mcp-public.livelydesert-f18ee3f4.westus2.azurecontainerapps.io/mcp}"
+    set_config disco "mcp_servers.evo-mcp.auth" "oauth"
+    set_config disco "mcp_servers.evo-mcp.oauth.client_id" "$TEAMS_GRAPH_CLIENT_ID"
+    set_config disco "mcp_servers.evo-mcp.oauth.scope" "api://ecbff0f1-4ac8-45c9-8365-50c16bc76881/access_as_user"
+    set_config disco "mcp_servers.evo-mcp.timeout" "180"
+    update_gateway_state "$LIVE_DIR/profiles/disco/gateway_state.json"
+    log "Configured disco profile (model=${DISCO_MODEL_DEFAULT:-gpt-5.6-sol}, mcp=evo-mcp)"
+  fi
 else
   log "teams_graph not configured (TEAMS_GRAPH_CLIENT_ID/TENANT_ID unset)"
 fi

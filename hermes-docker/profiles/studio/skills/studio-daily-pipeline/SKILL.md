@@ -84,8 +84,18 @@ NEW rows to drive the rest of the run. Do not post to Teams on a human's behalf.
 existing report (gviz CSV) to find NEW rows; log the refresh as a skipped write.
 
 ### 2. Vendor Image Sourcing & SKUing  (`context/workflows/02-...md`)
-For unclaimed NEW rows, source images from the vendor DAMs (creds in this profile's
-`.env`; the Merch Sheet is the live source of truth — passwords drift). Lay them out
+For unclaimed NEW rows, source images from the vendor DAMs (the Merch Sheet is the
+live source of truth for DAM links and credentials — passwords drift).
+**Merch Sheet access (headless):** the sheet is a SharePoint list that redirects a
+browser to Microsoft sign-in under the scheduler. Do NOT use the browser for it —
+read it via Graph as hermes-ai with the bundled helper:
+```bash
+/opt/hermes/.venv/bin/python3 skills/studio-daily-pipeline/scripts/read_merch_sheet.py --columns
+/opt/hermes/.venv/bin/python3 skills/studio-daily-pipeline/scripts/read_merch_sheet.py --filter "burton" --format json
+```
+(403 from the helper = hermes-ai lost list access — record as blocker, do not retry.)
+Then use the DAM URL + login columns from the sheet for the browser-based DAM
+downloads as usual. Lay images out
 in the standard folder structure under the day's work dir:
 `work/<YYYY-MM-DD>/<Brand>/Original/EB-XXXXXX-XXXX/`. Skip a brand/SKU and record a
 blocker if a DAM login fails — do not retry destructively.
