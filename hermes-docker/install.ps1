@@ -10,7 +10,7 @@
       1. Verifies Docker is installed and the daemon is running.
       2. Creates the persistent data directory (default: %USERPROFILE%\.hermes).
       3. Builds the custom hermes-evo image from the local Dockerfile (which extends
-         nousresearch/hermes-agent:v2026.7.7.2 and pre-installs the Microsoft Teams SDK).
+         nousresearch/hermes-agent:v2026.7.20 and pre-installs the Microsoft Teams SDK).
       4. (First run) Launches the interactive setup wizard to capture API keys.
       5. Starts the gateway in the background via docker compose.
 
@@ -19,7 +19,7 @@
     Defaults to "$env:USERPROFILE\.hermes".
 
 .PARAMETER BaseImage
-    Upstream base image to build FROM. Defaults to "nousresearch/hermes-agent:v2026.7.7.2".
+    Upstream base image to build FROM. Defaults to "nousresearch/hermes-agent:v2026.7.20".
     Override to pin a specific release, e.g. "nousresearch/hermes-agent:v1.2.3".
 
 .PARAMETER SkipSetup
@@ -44,7 +44,7 @@
 [CmdletBinding()]
 param(
     [string]$DataDir = (Join-Path $env:USERPROFILE ".hermes"),
-    [string]$BaseImage = "nousresearch/hermes-agent:v2026.7.7.2",
+    [string]$BaseImage = "nousresearch/hermes-agent:v2026.7.20",
     [switch]$SkipSetup,
     [switch]$NoStart,
     [string]$DashboardUser = "admin",

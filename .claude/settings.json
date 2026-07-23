@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(hermes --help)",
+      "Bash(hermes config *)",
+      "Bash(wsl -l -v)",
+      "WebFetch(domain:hub.docker.com)",
+      "WebFetch(domain:github.com)",
+      "PowerShell(az containerapp revision list --name aca-hermes-nfs --resource-group rg-hermes-sbx --query \"[].{Revision:name,Health:properties.healthState,Active:properties.active,Replicas:properties.replicas,Provisioning:properties.provisioningState,Created:properties.createdTime}\" --output table)",
+      "Bash(python -c \"import importlib.metadata as m; print\\(m.version\\('hermes-agent'\\)\\)\")",
+      "Bash(pip show *)",
+      "Bash(bash -n /c/Users/bgrow/Projects/evo_photo/hermes-docker/scripts/aca/hermes-aca-configure-profiles.sh)",
+      "Bash(git --no-pager diff hermes-docker/scripts/aca/hermes-aca-configure-profiles.sh)",
+      "Bash(PYTHONIOENCODING=utf-8 az containerapp exec --name aca-hermes-nfs --resource-group rg-hermes-sbx --command \"hermes profile list\")",
+      "PowerShell(az containerapp revision show --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --query \"{health:properties.healthState,replicas:properties.replicas,provisioningState:properties.provisioningState,runningState:properties.runningState}\" -o json)",
+      "PowerShell(az containerapp logs show --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --tail 100 2>&1)",
+      "PowerShell(az containerapp replica list --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 -o json)",
+      "PowerShell(az containerapp logs show --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --tail 300 --format text 2>&1)",
+      "PowerShell(az containerapp revision deactivate --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607171334)",
+      "PowerShell(az containerapp revision list --name aca-hermes-nfs --resource-group rg-hermes-sbx --query \"[].{Revision:name,Health:properties.healthState,Active:properties.active,Replicas:properties.replicas,Provisioning:properties.provisioningState}\" --output table)",
+      "PowerShell(az containerapp logs show --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --tail 50 --format text 2>&1)",
+      "PowerShell(az containerapp replica list --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --query \"[0].properties.containers[0].{ready:ready,restartCount:restartCount,runningState:runningState,runningStateDetails:runningStateDetails,started:started}\" -o json)",
+      "PowerShell(az containerapp replica list --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --query \"[0].properties.containers[0].{ready:ready,restartCount:restartCount,runningState:runningState,runningStateDetails:runningStateDetails}\" -o json)",
+      "PowerShell(az containerapp logs show --name aca-hermes-nfs --resource-group rg-hermes-sbx --revision aca-hermes-nfs--std2607230842 --tail 20 --format text 2>&1)",
+      "PowerShell(chcp 65001 | Out-Null; $env:PYTHONIOENCODING='utf-8'; $env:PYTHONUTF8='1'; az containerapp exec --name aca-hermes-nfs --resource-group rg-hermes-sbx --command \"hermes profile list\" 2>&1)"
+    ]
+  }
+}

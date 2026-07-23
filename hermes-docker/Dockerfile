@@ -13,9 +13,9 @@
 # To pin a specific upstream release instead of :latest, set BASE_IMAGE:
 #   docker compose build --pull --build-arg BASE_IMAGE=nousresearch/hermes-agent:v1.2.3
 #
-# Pinned to v2026.7.7.2 (Hermes 0.18.2). Docker Hub uses the calver tag, not "0.18.2".
+# Pinned to v2026.7.20 (Hermes 0.19.0). Docker Hub uses the calver tag, not "0.19.0".
 
-ARG BASE_IMAGE=nousresearch/hermes-agent:v2026.7.7.2
+ARG BASE_IMAGE=nousresearch/hermes-agent:v2026.7.20
 FROM ${BASE_IMAGE}
 
 # Switch to root so we can write into the venv owned by root.
@@ -73,6 +73,11 @@ RUN curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "https://downloads.r
 # truth for /opt/data — restored on boot, snapshotted every 60s. The repo's
 # profiles/ tree is reference material; install changes to the live volume
 # deliberately (see docs/hermes-ai-chat-setup.md ops notes).
+
+# Bundled evo skills: synced into EVERY profile's skills/ at boot by the base
+# image's skills_sync (so existing and future profiles all get them).
+# Layered onto the base image's bundled packs (per-file merge, nothing deleted).
+COPY skills /opt/hermes/skills/
 
 # teams_graph: custom platform adapter — Hermes chats as the hermes-ai user
 # via delegated Microsoft Graph (no Teams app, no Bot Framework, no threads).

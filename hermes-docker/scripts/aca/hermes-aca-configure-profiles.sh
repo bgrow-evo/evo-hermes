@@ -243,16 +243,25 @@ if [ -n "${TEAMS_GRAPH_CLIENT_ID:-}" ] && [ -n "${TEAMS_GRAPH_TENANT_ID:-}" ]; t
     set_config disco "model.provider" "$MODEL_PROVIDER"
     set_config disco "model.base_url" "$MODEL_BASE_URL"
     set_config disco "compression.codex_gpt55_autoraise" "false"
-    # Remote evo-mcp (OAuth as hermes-ai; token seeds live in the profile's
-    # mcp-tokens/ dir on the volume). Set every boot so a stale-config restore
-    # can never silently drop the MCP wiring.
-    set_config disco "mcp_servers.evo-mcp.url" "${DISCO_MCP_URL:-https://aca-evo-mcp-public.livelydesert-f18ee3f4.westus2.azurecontainerapps.io/mcp}"
-    set_config disco "mcp_servers.evo-mcp.auth" "oauth"
-    set_config disco "mcp_servers.evo-mcp.oauth.client_id" "$TEAMS_GRAPH_CLIENT_ID"
-    set_config disco "mcp_servers.evo-mcp.oauth.scope" "api://ecbff0f1-4ac8-45c9-8365-50c16bc76881/access_as_user"
-    set_config disco "mcp_servers.evo-mcp.timeout" "180"
+    # evo-mcp access is via the bundled `evo-mcp` skill (headless hermes-ai
+    # auth). The native mcp_servers integration is NOT configured: its OAuth
+    # provider requires an interactive browser flow and parks the server at
+    # every boot. Scrub any leftover config from earlier attempts.
+    python - "$LIVE_DIR/profiles/disco/config.yaml" <<'PY' || true
+import sys, yaml
+p = sys.argv[1]
+try:
+    with open(p) as f:
+        cfg = yaml.safe_load(f) or {}
+except FileNotFoundError:
+    sys.exit(0)
+if cfg.pop("mcp_servers", None) is not None:
+    with open(p, "w") as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+    print("[hermes-aca-config] removed legacy mcp_servers config from disco")
+PY
     update_gateway_state "$LIVE_DIR/profiles/disco/gateway_state.json"
-    log "Configured disco profile (model=${DISCO_MODEL_DEFAULT:-gpt-5.6-sol}, mcp=evo-mcp)"
+    log "Configured disco profile (model=${DISCO_MODEL_DEFAULT:-gpt-5.6-sol})"
   fi
 else
   log "teams_graph not configured (TEAMS_GRAPH_CLIENT_ID/TENANT_ID unset)"

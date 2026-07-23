@@ -238,7 +238,7 @@ docker compose exec hermes bash
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Extends pinned `nousresearch/hermes-agent:v2026.7.7.2`; bakes Teams SDK deps, image tools, the `teams_graph` adapter, and ACA hook scripts |
+| `Dockerfile` | Extends pinned `nousresearch/hermes-agent:v2026.7.20`; bakes Teams SDK deps, image tools, the `teams_graph` adapter, and ACA hook scripts |
 | `plugins/teams_graph/` | The Graph-user Teams adapter + ops scripts (`graph_login.py`, `list_chats.py`, `graph_whoami.py`) |
 | `provision-hermes-ai-graph.ps1` | One-time: Entra public-client app, delegated Graph scopes, admin consent, env wiring |
 | `scripts/azure/Build-HermesImage.ps1` | ACR cloud build |

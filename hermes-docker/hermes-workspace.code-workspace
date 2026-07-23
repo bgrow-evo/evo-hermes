@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../../evo_disco/OpenClaw/workspace"
+		},
+		{
+			"path": "../../hermes-workspace"
 		}
 	],
 	"settings": {}

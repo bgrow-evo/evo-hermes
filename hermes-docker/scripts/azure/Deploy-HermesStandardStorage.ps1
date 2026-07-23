@@ -204,7 +204,9 @@ foreach ($name in @(
     "TEAMS_GRAPH_TENANT_ID",
     "HERMES_ADMIN_CHAT_ID",
     "STUDIO_CHAT_ID",
-    "DISCO_CHAT_ID"
+    "DISCO_CHAT_ID",
+    # Azure Key Vault for agent secrets (read via system-assigned managed identity)
+    "HERMES_KEYVAULT_URI"
 )) {
     Add-EnvValue $acaEnv $hermesEnv $name
 }
@@ -303,13 +305,15 @@ $patch = [ordered]@{
                     # Boot restore copies the full data share (incl. the disco
                     # profile's ~7k-file Projects tree) over SMB before s6 starts
                     # the proxy; ACA's default startup window is too short and
-                    # kills the container mid-restore. Allow up to 10 minutes.
+                    # kills the container mid-restore. 10 minutes still wasn't
+                    # enough once the disco tree landed - allow up to 20 minutes
+                    # (240 x 5s; ACA caps failureThreshold at 240).
                     probes = @(
                         [ordered]@{
                             type = "Startup"
                             tcpSocket = [ordered]@{ port = $ProxyPort }
                             periodSeconds = 5
-                            failureThreshold = 120
+                            failureThreshold = 240
                             timeoutSeconds = 3
                         },
                         [ordered]@{
